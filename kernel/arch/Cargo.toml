@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [target.'cfg(target_arch = "riscv64")'.dependencies]
-riscv-rt = { version = "0.12.2", features = ["s-mode"] }
+riscv-rt = { version = "0.12.2", features = ["s-mode", "single-hart"] }
 riscv = "0.11.1"
 sbi = "0.2.0"

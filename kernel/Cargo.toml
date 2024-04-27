@@ -9,6 +9,9 @@ members = ["arch"]
 [dependencies]
 arch = { path = "arch" }
 
+[features]
+default = []
+
 [profile.release]
 codegen-units = 1
 opt-level = "s"
