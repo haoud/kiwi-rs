@@ -1,0 +1,24 @@
+{
+  "lspconfig": {
+    "rust_analyzer": {
+      "rust-analyzer": {
+        "cargo": {
+          "target": "riscv64gc-unknown-none-elf",
+          "unsetTest" : [
+            "kernel"
+          ]
+        },
+        "check": {
+          "command": "clippy",
+          "allTargets": false
+        },
+        "procMacro": {
+          "attribute": {
+            "enable": true
+          },
+          "enable": true
+        }
+      }
+    }
+  }
+}

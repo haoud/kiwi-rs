@@ -1,0 +1,16 @@
+[target.riscv64gc-unknown-none-elf]
+runner = """
+  qemu-system-riscv64
+    -serial mon:stdio
+    -machine virt               
+    -nographic
+    -m 32M                      
+    -kernel
+"""
+
+# Linker flags
+rustflags = [
+  "-Clink-arg=-Tmemory.x",
+  "-Clink-arg=-Tlink.x",
+  "-Cpanic=abort",
+]
