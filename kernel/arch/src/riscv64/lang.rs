@@ -15,8 +15,6 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 /// that will properly start the kernel and never return.
 #[riscv_rt::entry]
 unsafe fn _start(hart: usize, device_tree: usize) -> ! {
-    super::setup();
-
-    ::log::trace!("hart: {hart} device tree: {device_tree}");
+    super::setup(hart, device_tree as *const u8);
     crate::kiwi();
 }

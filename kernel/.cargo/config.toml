@@ -2,9 +2,9 @@
 runner = """
   qemu-system-riscv64
     -serial mon:stdio
-    -machine virt               
+    -machine virt
     -nographic
-    -m 32M                      
+    -m 32M
     -kernel
 """
 
