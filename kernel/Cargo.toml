@@ -3,14 +3,19 @@ name = "kernel"
 version = "0.1.0"
 edition = "2021"
 
+[dependencies]
+arch = { path = "arch" }
+log = "0.4.21"
+
+[features]
+default = ["logging"]
+logging = []
+
 [workspace]
 members = ["arch"]
 
-[dependencies]
-arch = { path = "arch" }
-
-[features]
-default = []
+[workspace.dependencies]
+log = "0.4.21"
 
 [profile.release]
 codegen-units = 1
