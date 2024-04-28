@@ -14,7 +14,9 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 /// and then call the `kiwi` function which is the main function of the kernel
 /// that will properly start the kernel and never return.
 #[riscv_rt::entry]
-unsafe fn _start() -> ! {
+unsafe fn _start(hart: usize, device_tree: usize) -> ! {
     super::setup();
-    crate::kiwi()
+
+    ::log::trace!("hart: {hart} device tree: {device_tree}");
+    crate::kiwi();
 }

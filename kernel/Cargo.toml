@@ -9,7 +9,7 @@ log = "0.4.21"
 
 [features]
 default = ["logging"]
-logging = []
+logging = ["arch/logging"]
 
 [workspace]
 members = ["arch"]

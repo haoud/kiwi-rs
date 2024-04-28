@@ -10,3 +10,7 @@ log = { workspace = true }
 riscv-rt = { version = "0.12.2", features = ["s-mode", "single-hart"] }
 riscv = "0.11.1"
 sbi = "0.2.0"
+
+[features]
+default = []
+logging = []

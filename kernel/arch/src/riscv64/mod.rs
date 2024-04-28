@@ -1,10 +1,15 @@
+use crate::generic;
+
 pub mod cpu;
 pub mod log;
 
 mod lang;
 
 /// Setup the riscv64 architecture
-pub fn setup() {}
+pub fn setup() {
+    #[cfg(feature = "logging")]
+    generic::log::setup();
+}
 
 /// Shutdown the computer
 #[inline]
