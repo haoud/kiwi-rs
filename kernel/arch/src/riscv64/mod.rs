@@ -1,7 +1,9 @@
-use crate::generic;
+use crate::{generic, memory::UsableMemory};
 
 pub mod cpu;
 pub mod log;
+pub mod memory;
+pub mod mmu;
 
 mod lang;
 
@@ -20,23 +22,8 @@ pub fn setup(hart: usize, device_tree: *const u8) {
             .expect("Failed to parse the device tree : cannot continue without this !")
     };
 
-    // Information about memory regions
-    for region in fdt.memory().regions() {
-        ::log::trace!(
-            "Memory region: {:#x} - {:#x}",
-            region.starting_address as usize,
-            region.starting_address as usize + region.size.unwrap_or(0)
-        );
-    }
-
-    // Information about reserved memory regions
-    for region in fdt.memory_reservations() {
-        ::log::trace!(
-            "Memory region: {:#x} - {:#x}",
-            region.address() as usize,
-            region.address() as usize + region.size()
-        );
-    }
+    let memory = UsableMemory::new(&fdt);
+    ::log::info!("Usable memory count: {} kio", memory.size() / 1024);
 }
 
 /// Shutdown the computer
