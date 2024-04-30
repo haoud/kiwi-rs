@@ -10,7 +10,6 @@ runner = """
 
 # Linker flags
 rustflags = [
-  "-Clink-arg=-Tmemory.x",
-  "-Clink-arg=-Tlink.x",
+  "-Clink-arg=-Tlink.ld",
   "-Cpanic=abort",
 ]

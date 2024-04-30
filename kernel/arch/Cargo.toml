@@ -10,7 +10,6 @@ spin = { workspace = true }
 log = { workspace = true }
 
 [target.'cfg(target_arch = "riscv64")'.dependencies]
-riscv-rt = { version = "0.12.2", features = ["s-mode", "single-hart"] }
 riscv = { version = "0.11.1", features = ["s-mode"] }
 fdt = "0.1.5"
 sbi = "0.2.0"
