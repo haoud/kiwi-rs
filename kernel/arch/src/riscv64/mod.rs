@@ -12,8 +12,13 @@ pub fn setup(hart: usize, device_tree: *const u8) {
     #[cfg(feature = "logging")]
     generic::log::setup();
 
+    // Some debug informations
     ::log::trace!("Booting on hart {hart}");
     ::log::trace!("Device tree is at {:p}", device_tree);
+
+    // Initialize the MMU
+    mmu::setup();
+    ::log::info!("MMU initialized");
 
     // Parse the device tree using the `fdt` crate
     // SAFETY: We must assume that the device tree pointer is valid

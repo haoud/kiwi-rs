@@ -19,6 +19,7 @@
 //!
 //! Congratulations! You have successfully added a new architecture to the kernel.
 #![no_std]
+#![allow(dead_code)]
 
 #[cfg(target_arch = "riscv64")]
 mod riscv64;
