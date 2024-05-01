@@ -1,9 +1,12 @@
 use crate::{generic, memory::UsableMemory};
 
 pub mod cpu;
+pub mod exception;
+pub mod irq;
 pub mod log;
 pub mod memory;
 pub mod mmu;
+pub mod timer;
 
 mod lang;
 
@@ -16,10 +19,6 @@ pub fn setup(hart: usize, device_tree: *const u8) {
     ::log::trace!("Booting on hart {hart}");
     ::log::trace!("Device tree is at {:p}", device_tree);
 
-    // Initialize the MMU
-    mmu::setup();
-    ::log::info!("MMU initialized");
-
     // Parse the device tree using the `fdt` crate
     // SAFETY: We must assume that the device tree pointer is valid
     let fdt = unsafe {
@@ -28,7 +27,16 @@ pub fn setup(hart: usize, device_tree: *const u8) {
     };
 
     let memory = UsableMemory::new(&fdt);
-    ::log::info!("Usable memory count: {} kio", memory.size() / 1024);
+    ::log::trace!("Usable memory count: {} kio", memory.size() / 1024);
+
+    // Initialize the MMU
+    mmu::setup();
+    ::log::info!("MMU initialized");
+
+    // Initialize the timer
+    timer::setup(&fdt);
+    ::log::info!("Timer initialized");
+    ::log::info!("Internal frequency: {} Hz", timer::internal_frequency());
 }
 
 /// Shutdown the computer
