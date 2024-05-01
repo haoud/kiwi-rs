@@ -1,5 +1,6 @@
 .section .init
 .globl _start
+.align 4
 _start:
   la sp, boot_stack_top
   call entry

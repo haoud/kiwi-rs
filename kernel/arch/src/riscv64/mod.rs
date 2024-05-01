@@ -29,6 +29,11 @@ pub fn setup(hart: usize, device_tree: *const u8) {
     let memory = UsableMemory::new(&fdt);
     ::log::trace!("Usable memory count: {} kio", memory.size() / 1024);
 
+    // Setup exception and IRQ handling
+    exception::setup();
+    irq::setup();
+    ::log::info!("Exception and IRQ handling initialized");
+
     // Initialize the MMU
     mmu::setup();
     ::log::info!("MMU initialized");
