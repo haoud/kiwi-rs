@@ -11,6 +11,17 @@ use core::ops::{Index, IndexMut};
 /// access the physical memory of the system.
 static KERNEL_TABLE: spin::Mutex<Table> = spin::Mutex::new(Table::empty());
 
+/// The virtual address where the kernel address space starts. Since we are
+/// developing a micro-kernel, allowing the kernel to access only the first
+/// 1 GiB of physical memory in the last 1 GiB of virtual memory should be
+/// enough and have the nice side effect of making the kernel's address space
+/// independent of the pagination mode used by the processor (SV39, SV48, etc).
+pub const KERNEL_VIRTUAL_BASE: Virtual = Virtual(0xFFFF_FFFF_C000_0000);
+
+/// The physical address where the RAM starts. This address will be mapped
+/// to the kernel's address space at the address defined by `KERNEL_VIRTUAL_BASE`.
+pub const KERNEL_PHYSICAL_BASE: Physical = Physical(0x8000_0000);
+
 /// Represents a page table. A page table is a data structure used by the
 /// processor to translate virtual addresses to physical addresses. The page
 /// table is composed of multiple levels, each level containing a number of
@@ -51,11 +62,8 @@ impl Table {
     /// table, and must ensure that the table will remain in memory while it is
     /// set as the current page table.
     pub unsafe fn set_current(&self) {
-        riscv::register::satp::set(
-            riscv::register::satp::Mode::Sv39,
-            0,
-            self as *const _ as usize >> 12,
-        );
+        let ppn = translate_kernel_ptr(self).0 >> 12;
+        riscv::register::satp::set(riscv::register::satp::Mode::Sv39, 0, ppn);
     }
 }
 
@@ -354,10 +362,6 @@ bitflags! {
 }
 
 impl Virtual {
-    /// The maximum virtual address that can be used. Kiwi only supports 39-bit
-    /// virtual addresses, meaning that the maximum virtual address is 2^39 - 1.
-    pub const MAX: Self = Self(0x0000_7FFF_FFFF_FFFF);
-
     /// The default page size in bytes. Kiwi uses 4 KiB pages.
     pub const PAGE_SIZE: usize = 0x1000;
 
@@ -368,7 +372,7 @@ impl Virtual {
     /// virtual address representable by the system ([`Virtual::MAX`]).
     #[must_use]
     pub const fn new(address: usize) -> Self {
-        assert!(address <= Self::MAX.0, "Virtual address is out of bounds");
+        // FIXME: Check if the address is canonical
         Self(address)
     }
 
@@ -398,7 +402,7 @@ impl Physical {
     /// addresses are 56-bit wide.
     pub const MAX: Self = Self(0x00FF_FFFF_FFFF_FFFF);
 
-    /// The size of a page in bytes. On RISC-V64, the page size is 4 KiB.
+    /// The size of a page in bytes.
     pub const PAGE_SIZE: usize = 0x1000;
 
     /// Create a new physical address from the given address.
@@ -439,14 +443,27 @@ impl Physical {
 /// manually map each page.
 pub fn setup() {
     let mut table = KERNEL_TABLE.lock();
-    for i in 0..256 {
+
+    // Map the first 255 GiB of physical memory to the first 255 GiB
+    // of virtual memory in the kernel's address space. This will allow
+    // the kernel to access any physical address easily without having
+    // to manually map each page.
+    for i in 256..511 {
         let entry = &mut table[i];
-        entry.set_address(Physical::new(1024 * 1024 * 1024 * i));
+        entry.set_address(Physical::new(i * 0x4000_0000));
         entry.set_executable(true);
         entry.set_writable(true);
         entry.set_readable(true);
         entry.set_present(true);
     }
+
+    // Map the kernel to the last 1 GiB of virtual memory.
+    let entry = &mut table[511];
+    entry.set_address(KERNEL_PHYSICAL_BASE);
+    entry.set_executable(true);
+    entry.set_writable(true);
+    entry.set_readable(true);
+    entry.set_present(true);
 
     // SAFETY: The kernel table was properly initialized and will not cause
     // a page fault when set as the current page table.
@@ -561,4 +578,23 @@ pub fn unmap(root: &mut Table, virt: Virtual) -> Result<Physical, UnmapError> {
 #[must_use]
 pub fn translate_physical(phys: Physical) -> Option<Virtual> {
     Some(Virtual::new(phys.0))
+}
+
+/// Translate a virtual address in the kernel's address space to a physical address.
+///
+/// # Panics
+/// Panics if the virtual address is not located in the kernel's address space,
+/// i.e. if it is not greater than or equal to `KERNEL_VIRTUAL_BASE`.
+pub fn translate_virtual_kernel(virt: Virtual) -> Physical {
+    assert!(virt.0 >= KERNEL_VIRTUAL_BASE.0);
+    Physical::new(virt.0 - KERNEL_VIRTUAL_BASE.0 + KERNEL_PHYSICAL_BASE.0)
+}
+
+/// Translate a kernel pointer to a physical address.
+///
+/// # Panics
+/// Panics if the pointer is not located in the kernel's address space,
+/// i.e. if it is not greater than or equal to `KERNEL_VIRTUAL_BASE`.
+pub fn translate_kernel_ptr<T>(ptr: *const T) -> Physical {
+    translate_virtual_kernel(Virtual::new(ptr as usize))
 }
