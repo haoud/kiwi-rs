@@ -4,8 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-config = { path = "crates/config" }
-macros = { path = "crates/macros" }
+intrusive-collections = {version = "0.9.6", default-features = false }
+config = { workspace = true }
+macros = { workspace = true }
+spin = { workspace = true }
 arch = { path = "arch" }
 log = "0.4.21"
 
