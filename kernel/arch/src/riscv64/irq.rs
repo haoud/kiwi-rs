@@ -1,7 +1,3 @@
-/// Acknowledge the interrupt, allowing the next interrupt of the same
-/// type to be delivered.
-pub fn ack(_irq: u32) {}
-
 /// Enable interrupts.
 ///
 /// # Safety

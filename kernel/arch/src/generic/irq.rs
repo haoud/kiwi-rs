@@ -1,8 +1,3 @@
-/// Acknowledge an IRQ, allowing the CPU to service the next one.
-pub fn ack(irq: u32) {
-    crate::target::irq::ack(irq);
-}
-
 /// Enable IRQs.
 ///
 /// # Safety

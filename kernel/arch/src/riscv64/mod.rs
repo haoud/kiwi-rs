@@ -1,7 +1,6 @@
 use crate::{generic, memory::UsableMemory};
 
 pub mod cpu;
-pub mod exception;
 pub mod irq;
 pub mod log;
 pub mod memory;
