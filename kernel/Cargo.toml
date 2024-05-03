@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 config = { path = "crates/config" }
+macros = { path = "crates/macros" }
 arch = { path = "arch" }
 log = "0.4.21"
 
@@ -13,10 +14,11 @@ default = ["logging"]
 logging = ["arch/logging"]
 
 [workspace]
-members = ["arch", "crates/config"]
+members = ["arch", "crates/config", "crates/macros"]
 
 [workspace.dependencies]
 config = { path = "crates/config" }
+macros = { path = "crates/macros" }
 bitflags = "2.5.0"
 heapless = "0.8.0"
 colored = "2.1.0"

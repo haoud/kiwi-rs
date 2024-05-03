@@ -7,6 +7,7 @@ edition = "2021"
 bitflags = { workspace = true }
 heapless = { workspace = true }
 config = { workspace = true }
+macros = { workspace = true }
 spin = { workspace = true }
 log = { workspace = true }
 

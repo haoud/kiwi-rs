@@ -1,4 +1,5 @@
 use super::log;
+use macros::init;
 
 core::arch::global_asm!(include_str!("asm/boot.asm"));
 
@@ -26,6 +27,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 /// The entry point of the kernel. It will call architecture-specific setup
 /// and then call the `kiwi` function which is the main function of the kernel
 /// that will properly start the kernel and never return.
+#[init]
 #[no_mangle]
 unsafe extern "C" fn entry(hart: usize, device_tree: usize) -> ! {
     // Clear the BSS section

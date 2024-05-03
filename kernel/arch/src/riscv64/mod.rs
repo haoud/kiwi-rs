@@ -1,4 +1,5 @@
 use crate::{generic, memory::UsableMemory};
+use macros::init;
 
 pub mod cpu;
 pub mod irq;
@@ -11,6 +12,7 @@ pub mod trap;
 mod lang;
 
 /// Setup the riscv64 architecture
+#[init]
 pub fn setup(hart: usize, device_tree: *const u8) {
     #[cfg(feature = "logging")]
     generic::log::setup();
