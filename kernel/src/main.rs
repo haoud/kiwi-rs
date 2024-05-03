@@ -10,5 +10,13 @@ pub mod config;
 #[no_mangle]
 pub fn kiwi() -> ! {
     arch::log::write("Hello, world!\n");
-    arch::shutdown();
+
+    unsafe {
+        arch::irq::enable();
+    }
+
+    loop {
+        arch::timer::next_event(core::time::Duration::from_secs(1));
+        arch::cpu::relax();
+    }
 }

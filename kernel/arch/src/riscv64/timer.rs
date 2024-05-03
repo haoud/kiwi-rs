@@ -11,11 +11,21 @@ pub fn setup(device_tree: &fdt::Fdt) {
 
     let frequency = cpu.timebase_frequency() as u64;
     *INTERNAL_TICK.lock() = 1_000_000_000 / frequency;
+
+    // Enable timer interrupts.
+    unsafe {
+        riscv::register::sie::set_stimer();
+    }
+}
+
+/// Shutdown the timer, preventing any further interrupts from being raised.
+pub fn shutdown() {
+    _ = sbi::timer::set_timer(u64::MAX);
 }
 
 /// Set the next timer trigger to the given duration from now. An interrupt will
 /// be raised when the timer will reach the given duration.
-pub fn next_trigger(next: core::time::Duration) {
+pub fn next_event(next: core::time::Duration) {
     // Convert the duration to nanoseconds. It should fit in a u64 and should
     // be enough to represent the time until the next trigger.
     let nano = u64::try_from(next.as_nanos())

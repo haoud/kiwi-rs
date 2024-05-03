@@ -3,12 +3,19 @@
 	addi \reg, \reg, %lo(\sym)
 .endm
 
+.equ KERNEL_VIRTUAL_BASE, 0xFFFFFFFFC0000000
+.equ KERNEL_PHYSICAL_BASE, 0x80000000
+
 .section .early, "ax"
 .globl _start
 .align 4
 _start:
   .option push
   .option norelax
+
+  # Disable interrupts
+  csrw sie, zero
+  csrc sip, zero
 
   # Setup satp with sv39 mode and the boot page table
   la t0, boot_page_table
@@ -17,6 +24,12 @@ _start:
   slli t1, t1, 60
   or t0, t0, t1
   csrw satp, t0
+
+  # Update the pointer in a1 to use the kernel virtual base
+  la t0, KERNEL_PHYSICAL_BASE
+  la t1, KERNEL_VIRTUAL_BASE
+  sub a1, a1, t0
+  add a1, a1, t1
 
   # Setup the stack pointer and jump to the entry point
   LA_FAR sp, boot_stack_top

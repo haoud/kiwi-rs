@@ -12,8 +12,14 @@ extern "C" {
 /// bug in the kernel. It will print some information about the panic if the
 /// `log` feature is enabled and then stop the kernel forever.
 #[panic_handler]
-fn panic(_info: &core::panic::PanicInfo) -> ! {
-    log::write("Kernel panic, exiting :(\n");
+fn panic(info: &core::panic::PanicInfo) -> ! {
+    if let Some(message) = info.payload().downcast_ref::<&str>() {
+        log::write("Kernel panic: ");
+        log::write(message);
+        log::write(", exiting :(\n");
+    } else {
+        log::write("Kernel panic, exiting :(\n");
+    }
     sbi::legacy::shutdown();
 }
 
