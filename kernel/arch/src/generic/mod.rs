@@ -5,6 +5,7 @@ pub mod log;
 pub mod memory;
 pub mod mmu;
 pub mod timer;
+pub mod trap;
 
 /// Shutdown the system.
 pub fn shutdown() -> ! {

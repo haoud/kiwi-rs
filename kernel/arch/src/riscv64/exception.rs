@@ -1,3 +1,1 @@
-pub fn setup() {}
-
-pub fn ack(exception: u32) {}
+pub fn ack(_exception: u32) {}

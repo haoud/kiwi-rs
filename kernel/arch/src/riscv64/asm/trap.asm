@@ -40,8 +40,12 @@ kernel_enter:
   sd x30, 29*8(sp)
   sd x31, 30*8(sp)
 
-  call trap
+  ld ra, kernel_leave
+  jal trap
 
+.globl kernel_leave
+.align 4
+kernel_leave:
   # Restore all registers
   ld x1, 0*8(sp)
   ld x2, 1*8(sp)
@@ -79,9 +83,4 @@ kernel_enter:
   # Restore the user's stack pointer and store back the kernel stack
   # into the sscratch register atomically
   csrrw sp, sscratch, sp
-  sret
-
-.globl kernel_leave
-.align 4
-kernel_leave:
   sret

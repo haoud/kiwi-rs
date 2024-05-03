@@ -7,6 +7,7 @@ pub mod log;
 pub mod memory;
 pub mod mmu;
 pub mod timer;
+pub mod trap;
 
 mod lang;
 
@@ -30,9 +31,8 @@ pub fn setup(hart: usize, device_tree: *const u8) {
     ::log::trace!("Usable memory count: {} kio", memory.size() / 1024);
 
     // Setup exception and IRQ handling
-    exception::setup();
-    irq::setup();
-    ::log::info!("Exception and IRQ handling initialized");
+    trap::setup();
+    ::log::info!("Trap handling initialized");
 
     // Initialize the MMU
     mmu::setup();
