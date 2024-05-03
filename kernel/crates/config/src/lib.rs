@@ -1,3 +1,5 @@
+#![no_std]
+
 /// The maximum number of tasks that can be created. The kernel will use this
 /// constant to allocate memory for the task control blocks and other data
 /// during initialization. Diminishing this value will reduce the memory usage

@@ -7,7 +7,7 @@ pub static KERNEL_STACK: KernelStack = KernelStack::new();
 /// aligned to 16 bytes, which sould be enough for most architectures.
 #[repr(align(16))]
 pub struct KernelStack {
-    stack: [u8; 4096],
+    stack: [u8; config::KERNEL_STACK_SIZE],
 }
 
 impl KernelStack {
