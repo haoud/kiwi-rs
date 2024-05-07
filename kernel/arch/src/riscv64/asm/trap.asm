@@ -1,4 +1,5 @@
 .section .text
+.extern thread_trap
 .globl kernel_enter
 .align 4
 kernel_enter:
@@ -6,7 +7,17 @@ kernel_enter:
   # atomically using the sscratch register
   csrrw sp, sscratch, sp
 
-  # Save all registers
+  # Check if were in user mode or in kernel mode and jump
+  # to the appropriate trap handler
+  beqz sp, kernel_trap
+  bnez sp, thread_trap
+
+.align 4
+kernel_trap:
+  # Restore the kernel stack pointer that was swapped with
+  # the ssratch register and save all registers into the
+  # kernel stack
+  csrrw sp, sscratch, sp
   addi sp, sp, -32*8
   sd x1, 0*8(sp)
   sd x2, 1*8(sp)
@@ -40,12 +51,8 @@ kernel_enter:
   sd x30, 29*8(sp)
   sd x31, 30*8(sp)
 
-  ld ra, kernel_leave
-  jal trap
+  call kernel_trap_handler
 
-.globl kernel_leave
-.align 4
-kernel_leave:
   # Restore all registers
   ld x1, 0*8(sp)
   ld x2, 1*8(sp)
@@ -79,8 +86,4 @@ kernel_leave:
   ld x30, 29*8(sp)
   ld x31, 30*8(sp)
   addi sp, sp, 32*8
-  
-  # Restore the user's stack pointer and store back the kernel stack
-  # into the sscratch register atomically
-  csrrw sp, sscratch, sp
   sret

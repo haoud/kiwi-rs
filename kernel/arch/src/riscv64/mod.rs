@@ -6,6 +6,7 @@ pub mod irq;
 pub mod log;
 pub mod memory;
 pub mod mmu;
+pub mod thread;
 pub mod timer;
 pub mod trap;
 
@@ -13,7 +14,7 @@ mod lang;
 
 /// Setup the riscv64 architecture
 #[init]
-pub fn setup(hart: usize, device_tree: *const u8) {
+pub fn setup(hart: usize, device_tree: *const u8) -> UsableMemory {
     #[cfg(feature = "logging")]
     generic::log::setup();
 
@@ -43,6 +44,8 @@ pub fn setup(hart: usize, device_tree: *const u8) {
     timer::setup(&fdt);
     ::log::info!("Timer initialized");
     ::log::info!("Internal frequency: {} Hz", timer::internal_frequency());
+
+    memory
 }
 
 /// Shutdown the computer

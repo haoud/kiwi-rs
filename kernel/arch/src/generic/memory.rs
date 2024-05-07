@@ -60,7 +60,11 @@ impl UsableMemory {
     pub fn allocate_zeroed_page(&mut self) -> Option<Physical> {
         let page = self.allocate_page()?;
         unsafe {
-            core::ptr::write_bytes(page.0 as *mut u8, 0, 4096);
+            core::ptr::write_bytes(
+                crate::mmu::translate_physical(page).unwrap().0 as *mut u8,
+                0,
+                4096,
+            );
         }
         Some(page)
     }

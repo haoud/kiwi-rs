@@ -37,6 +37,5 @@ unsafe extern "C" fn entry(hart: usize, device_tree: usize) -> ! {
     core::ptr::write_bytes(core::ptr::addr_of!(__bss_start) as *mut u8, 0, bss_size);
 
     // Setup the architecture-specific stuff and start the kernel
-    super::setup(hart, device_tree as *const u8);
-    crate::kiwi();
+    crate::kiwi(super::setup(hart, device_tree as *const u8));
 }

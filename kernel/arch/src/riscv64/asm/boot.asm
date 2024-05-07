@@ -50,6 +50,6 @@ boot_page_table:
 # Reserve 8 KiB for the boot stack
 .section .bss
 boot_stack_bottom:
-.space 8192
+.space 32678
 boot_stack_top:
 

@@ -1,0 +1,75 @@
+use super::{mmu, trap};
+
+core::arch::global_asm!(include_str!("asm/thread.asm"));
+
+extern "C" {
+    fn thread_execute(context: &mut trap::Context);
+}
+
+/// A thread is a sequence of instructions that can be executed independently
+/// of other code. On RISC-V, a thread is represented by a `Context` that contains
+/// a copy of all the registers and a `Table` that contains the page table of the
+/// thread.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Thread {
+    context: trap::Context,
+    table: mmu::Table,
+}
+
+impl Thread {
+    /// Create a new thread with an empty page table.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            context: trap::Context::new(),
+            table: mmu::Table::empty(),
+        }
+    }
+
+    /// Return a mutable reference to the page table of the thread.
+    #[must_use]
+    pub fn table_mut(&mut self) -> &mut mmu::Table {
+        &mut self.table
+    }
+
+    /// Return a reference to the page table of the thread.
+    #[must_use]
+    pub fn table(&self) -> &mmu::Table {
+        &self.table
+    }
+}
+
+/// Create a new thread with the given instruction pointer and stack pointer.
+/// This will create a thread with a default context and an empty user page
+/// table (but still containing the kernel mappings).
+pub fn create(ip: usize, stack: usize) -> Thread {
+    let mut thread = Thread::new();
+    thread.table.setup_from_kernel_space();
+    thread.context.set_sp(stack);
+    thread.context.set_ip(ip);
+    thread
+}
+
+/// Save state of the current thread that was not saved by the trap handler
+/// for efficient trap handling. The trap handler will only save the minimal
+/// state required to run the trap handler without conflicting with the
+/// thread state. This often means that only the CPU registers (used by the
+/// kernel) are saved prior to handling the trap. State that is not altered
+/// by the kernel, such as the FPU state, can be saved before a context switch
+/// to avoid the overhead of saving and restoring the state on every trap.
+pub fn save(_thread: &mut Thread) {
+    // TODO: Save FPU state
+}
+
+/// Execute the current thread. This function will switch to the page table
+/// of the thread and execute the thread. When a trap will occur, the trap
+/// handler will be called and the thread will be paused. The trap handler
+/// will invoke some incantations and will return to the caller of this
+/// function.
+pub fn execute(thread: &mut Thread) {
+    // TODO: Restore FPU state
+    unsafe {
+        thread.table().set_current();
+        thread_execute(&mut thread.context);
+    }
+}

@@ -22,6 +22,11 @@ pub const KERNEL_VIRTUAL_BASE: Virtual = Virtual(0xFFFF_FFFF_C000_0000);
 /// to the kernel's address space at the address defined by `KERNEL_VIRTUAL_BASE`.
 pub const KERNEL_PHYSICAL_BASE: Physical = Physical(0x8000_0000);
 
+/// The start of ther kernel's address space. This corresponds to the first address
+/// after the 'canonical hole' in the virtual address space and goes up to the last
+/// address of the virtual address space.
+pub const KERNEL_START: usize = 0xFFFF_FFC0_0000_0000;
+
 /// Represents a page table. A page table is a data structure used by the
 /// processor to translate virtual addresses to physical addresses. The page
 /// table is composed of multiple levels, each level containing a number of
@@ -53,6 +58,22 @@ impl Table {
         Self([Entry::missing(); 512])
     }
 
+    /// Set all the user-accessible entries of the table to zero and copy the
+    /// kernel address space into the table.
+    ///
+    /// If any of the user-accessible entries was pointer to a valid table or a
+    /// valid page, this will lead to the memory leak of the entire table and its
+    /// sub-tables or pages.
+    pub fn setup_from_kernel_space(&mut self) {
+        let table = KERNEL_TABLE.lock();
+        for i in 0..256 {
+            self[i] = Entry::missing();
+        }
+        for i in 256..512 {
+            self[i] = table[i];
+        }
+    }
+
     /// Set the current page table to this table.
     ///
     /// # Safety
@@ -64,6 +85,7 @@ impl Table {
     pub unsafe fn set_current(&self) {
         let ppn = translate_kernel_ptr(self).0 >> 12;
         riscv::register::satp::set(riscv::register::satp::Mode::Sv39, 0, ppn);
+        riscv::asm::sfence_vma_all();
     }
 }
 
@@ -450,7 +472,7 @@ pub fn setup() {
     // to manually map each page.
     for i in 256..511 {
         let entry = &mut table[i];
-        entry.set_address(Physical::new(i * 0x4000_0000));
+        entry.set_address(Physical::new((i - 256) * 0x4000_0000));
         entry.set_executable(true);
         entry.set_writable(true);
         entry.set_readable(true);
@@ -484,11 +506,11 @@ pub fn map(
     // the flags given as well as the required level to traverse in order
     // to map the physical address.
     let (align, target_level) = if flags.contains(Flags::HUGE_1GB) {
-        (0x40000000, 1)
+        (0x40000000, 2)
     } else if flags.contains(Flags::HUGE_2MB) {
-        (0x200000, 2)
+        (0x200000, 1)
     } else {
-        (0x1000, 3)
+        (0x1000, 0)
     };
 
     // Check if the physical address is properly aligned.
@@ -512,7 +534,9 @@ pub fn map(
                 // the frame like this. What if the frame passed to us is not
                 // regular memory, but a framebuffer or a MMIO device ? We should
                 // probably return an error in this case.
+                // FIXME: Zero the frame
                 entry.set_address(phys);
+                entry.set_present(true);
                 return Err(MapError::FrameConsumed);
             } else {
                 return Err(MapError::NeedIntermediateTable);
@@ -577,7 +601,7 @@ pub fn unmap(root: &mut Table, virt: Virtual) -> Result<Physical, UnmapError> {
 /// representable by the system, this function will return `None`.
 #[must_use]
 pub fn translate_physical(phys: Physical) -> Option<Virtual> {
-    Some(Virtual::new(phys.0))
+    Some(Virtual::new(KERNEL_START + phys.0))
 }
 
 /// Translate a virtual address in the kernel's address space to a physical address.

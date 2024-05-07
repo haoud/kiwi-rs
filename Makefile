@@ -1,11 +1,14 @@
 all: build
 
 # Build the userspace and kernel
-build: build-kernel
+build: build-user build-kernel
 
 # Build the kernel
 build-kernel:
 	cd kernel && cargo build --release --target riscv64gc-unknown-none-elf
+
+build-user:
+	cd user && make build
 
 # Run the kernel
 run: build

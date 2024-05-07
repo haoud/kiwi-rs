@@ -39,6 +39,12 @@ impl Physical {
     }
 }
 
+impl From<Physical> for usize {
+    fn from(physical: Physical) -> Self {
+        physical.0
+    }
+}
+
 impl Add<usize> for Physical {
     type Output = Self;
 
@@ -111,6 +117,12 @@ impl Virtual {
     }
 }
 
+impl From<Virtual> for usize {
+    fn from(virt: Virtual) -> Self {
+        virt.0
+    }
+}
+
 impl Add<usize> for Virtual {
     type Output = Self;
 
@@ -133,7 +145,7 @@ bitflags! {
     /// Management Unit (MMU) of the system. For some architectures, some of these
     /// rights may not be supported (e.g the `EXECUTE` right on some x86 systems) or
     /// may be implicit (e.g the `READ` is always granted on x86 systems).
-    #[derive(Default, Clone, Copy, PartialEq, Eq)]
+    #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
     pub struct Rights: u32 {
         const USER = 1 << 0;
         const READ = 1 << 1;
@@ -146,7 +158,7 @@ bitflags! {
     }
 
     /// A set of flags that can be used to control the behavior of a memory region.
-    #[derive(Default, Clone, Copy, PartialEq, Eq)]
+    #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
     pub struct Flags: u32 {
         /// The memory region is global and should not be flushed from the TLB when
         /// changing the address space. This must be only used if a page is shared

@@ -1,10 +1,26 @@
 use crate::target::trap::{ExceptionNr, InterruptNr};
 
+/// The stack used by the kernel to handle interrupts and exceptions. Kiwi
+/// has made the choice to use a single stack per core to handle interrupts
+/// instead of using a separate kernel stack for threads.
+/// This brings several advantages:
+///     - Less memory usage, can save dozens of megabytes of memory
+///       on a system with many threads.
+///     - Better cache locality, as the kernel stack will have more
+///       chances to be in the cache.
+///     - Simpler code
+/// The main inconvenience of this approach is that the kernel cannot be
+/// preemted during the middle of its execution. However, this is less of
+/// a problem for a microkernel like Kiwi, as most of the kernel code should
+/// be simple and fast to execute. We can also use cooperative preemption by
+/// leveraging the async/await feature of Rust to reduce the preemption latency
+/// by allowing the kernel to yield the CPU to another thread when it is
+/// waiting for an event.
 pub static KERNEL_STACK: KernelStack = KernelStack::new();
 
 /// The kernel stack. This is used to handle interrupts and exceptions.
-/// The stakc is packed inside a struct to ensure that it is properly
-/// aligned to 16 bytes, which sould be enough for most architectures.
+/// The stack is packed inside a struct to ensure that it is properly
+/// aligned to 16 bytes, which should be enough for most architectures.
 #[repr(align(16))]
 pub struct KernelStack {
     stack: [u8; config::KERNEL_STACK_SIZE],
