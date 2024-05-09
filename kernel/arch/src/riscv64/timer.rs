@@ -1,6 +1,8 @@
+use seqlock::SeqLock;
+
 /// The internal timer frequency, in Hertz. This is the rate at which the timer
 /// counter is incremented/decremented.
-static INTERNAL_TICK: spin::Mutex<u64> = spin::Mutex::new(0);
+static INTERNAL_TICK: SeqLock<u64> = SeqLock::new(0);
 
 /// Setup the timer subsystem. It will extract the timebase frequency from the
 /// device tree and calculate the internal tick value, which is the number of
@@ -12,7 +14,7 @@ pub fn setup(device_tree: &fdt::Fdt) {
         .expect("No cpu found in the device tree");
 
     let frequency = cpu.timebase_frequency() as u64;
-    *INTERNAL_TICK.lock() = 1_000_000_000 / frequency;
+    INTERNAL_TICK.write(1_000_000_000 / frequency);
 
     // Enable timer interrupts.
     unsafe {
@@ -50,5 +52,5 @@ pub fn internal_frequency() -> u64 {
 /// The duration of a single internal tick, in nanoseconds.
 #[must_use]
 pub fn internal_tick() -> u64 {
-    *INTERNAL_TICK.lock()
+    INTERNAL_TICK.read()
 }

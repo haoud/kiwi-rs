@@ -17,9 +17,10 @@ default = ["logging"]
 logging = ["arch/logging"]
 
 [workspace]
-members = ["arch", "crates/config", "crates/macros"]
+members = ["arch", "crates/config", "crates/macros", "crates/seqlock"]
 
 [workspace.dependencies]
+seqlock = { path = "crates/seqlock" }
 config = { path = "crates/config" }
 macros = { path = "crates/macros" }
 bitflags = "2.5.0"

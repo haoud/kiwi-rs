@@ -5,6 +5,7 @@ use heapless::Vec;
 impl UsableMemory {
     /// Create a new `UsableMemory` structure from the device tree given
     /// as argument.
+    #[inline]
     #[must_use]
     pub fn new(device_tree: &Fdt) -> Self {
         let mut regions = Vec::<Region, 32>::new();
