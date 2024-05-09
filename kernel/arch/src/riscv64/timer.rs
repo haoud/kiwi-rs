@@ -1,3 +1,5 @@
+/// The internal timer frequency, in Hertz. This is the rate at which the timer
+/// counter is incremented/decremented.
 static INTERNAL_TICK: spin::Mutex<u64> = spin::Mutex::new(0);
 
 /// Setup the timer subsystem. It will extract the timebase frequency from the

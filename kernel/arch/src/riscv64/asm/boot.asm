@@ -47,9 +47,9 @@ boot_page_table:
   .fill 508, 8, 0
   .quad 0x000000002000000F
 
-# Reserve 8 KiB for the boot stack
+# Reserve 64 KiB for the boot stack
 .section .bss
 boot_stack_bottom:
-.space 32678
+.space 64 * 1024
 boot_stack_top:
 

@@ -9,3 +9,13 @@ pub fn relax() {
         core::arch::asm!("wfi");
     }
 }
+
+/// Freezes the CPU by entering an infinite loop. This function is used to stop the CPU
+/// from executing instructions and is used to halt the CPU. This function should not
+/// return and should be used to stop the CPU from executing instructions.
+#[inline]
+pub fn freeze() -> ! {
+    loop {
+        relax();
+    }
+}

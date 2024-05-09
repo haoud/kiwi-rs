@@ -25,6 +25,10 @@ intrusive_adapter!(TaskAdapter<'a> = &'a Task<'a>: Task { link: LinkedListLink }
 
 #[derive(Debug)]
 pub struct Task<'a> {
+    /// The thread associated with the task. This is the thread that will be
+    /// executed when the task is scheduled.
+    thread: arch::thread::Thread,
+
     /// The task's pager. This is the task that will receive a message when a
     /// page fault occurs. This is used to implement demand paging.
     pager: Option<&'a Task<'a>>,
@@ -46,10 +50,17 @@ impl Task<'_> {
     #[must_use]
     const fn new() -> Self {
         Self {
-            link: LinkedListLink::new(),
-            state: State::Unused,
+            thread: arch::thread::Thread::new(),
             pager: None,
+            state: State::Unused,
+            link: LinkedListLink::new(),
         }
+    }
+
+    /// The task's thread.
+    #[must_use]
+    pub fn thread(&mut self) -> &mut arch::thread::Thread {
+        &mut self.thread
     }
 
     /// The task's pager.

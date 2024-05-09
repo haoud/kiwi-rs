@@ -27,6 +27,9 @@ pub const KERNEL_PHYSICAL_BASE: Physical = Physical(0x8000_0000);
 /// address of the virtual address space.
 pub const KERNEL_START: usize = 0xFFFF_FFC0_0000_0000;
 
+/// The size of a page in bytes.
+pub const PAGE_SIZE: usize = 4096;
+
 /// Represents a page table. A page table is a data structure used by the
 /// processor to translate virtual addresses to physical addresses. The page
 /// table is composed of multiple levels, each level containing a number of
