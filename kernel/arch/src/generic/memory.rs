@@ -1,4 +1,4 @@
-use crate::mmu::Physical;
+use crate::mmu::{self, Physical};
 use heapless::Vec;
 
 /// A structure representing the usable memory regions of the system. It is
@@ -77,6 +77,25 @@ impl UsableMemory {
         self.allocate_memory::<[u8; 4096]>(4096, 4096)
     }
 
+    /// Find the last usable address in the memory regions. This address is guaranteed
+    /// to be page aligned. If no regions are available, the function will return 0.
+    #[must_use]
+    pub fn last_address(&self) -> mmu::Physical {
+        // Find the region with the highest end address
+        self.regions
+            .iter()
+            .max_by_key(|region| region.start + region.length)
+            .map(|region| mmu::Physical(region.start + region.length))
+            .map(|addr| addr.page_align_down())
+            .unwrap_or(mmu::Physical(0))
+    }
+
+    /// Convert the usable memory into a list of free memory regions.
+    #[must_use]
+    pub fn into_free_regions(self) -> Vec<Region, 32> {
+        self.regions
+    }
+
     /// Return the size of the usable memory regions in bytes.
     #[must_use]
     pub fn size(&self) -> usize {
@@ -89,4 +108,12 @@ impl UsableMemory {
 pub struct Region {
     pub start: usize,
     pub length: usize,
+}
+
+impl Region {
+    /// Return the end address of the region
+    #[must_use]
+    pub fn end(&self) -> mmu::Physical {
+        mmu::Physical(self.start + self.length)
+    }
 }

@@ -13,11 +13,25 @@ use core::ops::{Add, Sub};
 pub struct Physical(pub(crate) usize);
 
 impl Physical {
+    /// Return the index of the frame that contains the physical address. This is
+    /// useful to find the frame that contains the physical address, which is used
+    /// to map the physical address to a virtual address.
+    #[must_use]
+    pub const fn frame_idx(self) -> usize {
+        self.0 / PAGE_SIZE
+    }
+
+    /// Convert a physical address to a `usize`.
+    #[must_use]
+    pub const fn as_usize(&self) -> usize {
+        self.0
+    }
+
     /// Align down the physical address to the given alignment. The alignment must be
     /// a power of two, otherwise the result will be incorrect. If the physical address
     /// is already aligned to the given alignment, the address will not be changed.
     #[must_use]
-    pub fn align_down(self, align: usize) -> Self {
+    pub const fn align_down(self, align: usize) -> Self {
         debug_assert!(align.is_power_of_two());
         Self(self.0 & !(align - 1))
     }
@@ -26,7 +40,7 @@ impl Physical {
     /// a power of two, otherwise the result will be incorrect. If the physical address
     /// is already aligned to the given alignment, the address will not be changed.
     #[must_use]
-    pub fn align_up(self, align: usize) -> Self {
+    pub const fn align_up(self, align: usize) -> Self {
         debug_assert!(align.is_power_of_two());
         Self((self.0 + align - 1) & !(align - 1))
     }
@@ -34,7 +48,7 @@ impl Physical {
     /// Verify if the physical address is aligned to the given alignment. The alignment
     /// must be a power of two, otherwise the result will be incorrect.
     #[must_use]
-    pub fn is_aligned(self, align: usize) -> bool {
+    pub const fn is_aligned(self, align: usize) -> bool {
         debug_assert!(align.is_power_of_two());
         self.0 & (align - 1) == 0
     }
@@ -73,11 +87,17 @@ impl Sub<usize> for Physical {
 pub struct Virtual(pub(crate) usize);
 
 impl Virtual {
+    /// Convert a virtual address to a `usize`.
+    #[must_use]
+    pub const fn as_usize(&self) -> usize {
+        self.0
+    }
+
     /// Align down the virtual address to the given alignment. The alignment must be
     /// a power of two, otherwise the result will be incorrect. If the virtual address
     /// is already aligned to the given alignment, the address will not be changed.
     #[must_use]
-    pub fn align_down(self, align: usize) -> Self {
+    pub const fn align_down(self, align: usize) -> Self {
         debug_assert!(align.is_power_of_two());
         Self(self.0 & !(align - 1))
     }
@@ -86,7 +106,7 @@ impl Virtual {
     /// a power of two, otherwise the result will be incorrect. If the virtual address
     /// is already aligned to the given alignment, the address will not be changed.
     #[must_use]
-    pub fn align_up(self, align: usize) -> Self {
+    pub const fn align_up(self, align: usize) -> Self {
         debug_assert!(align.is_power_of_two());
         Self((self.0 + align - 1) & !(align - 1))
     }
@@ -94,7 +114,7 @@ impl Virtual {
     /// Verify if the virtual address is aligned to the given alignment. The alignment
     /// must be a power of two, otherwise the result will be incorrect.
     #[must_use]
-    pub fn is_aligned(self, align: usize) -> bool {
+    pub const fn is_aligned(self, align: usize) -> bool {
         debug_assert!(align.is_power_of_two());
         self.0 & (align - 1) == 0
     }
@@ -107,13 +127,13 @@ impl Virtual {
 
     /// Convert the virtual address to a mutable raw pointer.
     #[must_use]
-    pub fn as_mut_ptr<T>(self) -> *mut T {
+    pub const fn as_mut_ptr<T>(self) -> *mut T {
         self.0 as *mut T
     }
 
     /// Convert the virtual address to a raw pointer.
     #[must_use]
-    pub fn as_ptr<T>(self) -> *const T {
+    pub const fn as_ptr<T>(self) -> *const T {
         self.0 as *const T
     }
 }

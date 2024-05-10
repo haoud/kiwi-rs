@@ -2,7 +2,7 @@
 #![no_main]
 
 pub mod elf;
-pub mod task;
+pub mod pmm;
 
 /// The initial user-space process that will be executed by the kernel. This is the
 /// only user-space process that is started directly by the kernel. All other user-space
@@ -20,9 +20,9 @@ static INIT: &[u8] =
 /// up memory space.
 #[macros::init]
 #[no_mangle]
-pub fn kiwi(mut memory: arch::memory::UsableMemory) -> ! {
-    arch::log::write("Hello, world!\n");
-    arch::thread::execute(&mut elf::load(INIT, &mut memory));
+pub fn kiwi(memory: arch::memory::UsableMemory) -> ! {
+    pmm::setup(memory);
+    arch::thread::execute(&mut elf::load(INIT));
     log::debug!("Thread trapped back to kernel");
     arch::cpu::freeze();
 }

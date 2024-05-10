@@ -1,3 +1,5 @@
+use crate::pmm;
+
 /// Load an ELF file into memory and return a thread that can be executed.
 ///
 /// # Safety
@@ -5,7 +7,7 @@
 /// process. After the boot process, the memory used by this function will be
 /// reclaimed by the kernel to reuse it for other purposes.
 #[macros::init]
-pub fn load(file: &[u8], memory: &mut arch::memory::UsableMemory) -> arch::thread::Thread {
+pub fn load(file: &[u8]) -> arch::thread::Thread {
     let header = elf::ElfBytes::<elf::endian::LittleEndian>::minimal_parse(file)
         .expect("Failed to parse ELF file");
     let entry = header.ehdr.e_entry as usize;
@@ -27,9 +29,8 @@ pub fn load(file: &[u8], memory: &mut arch::memory::UsableMemory) -> arch::threa
             let file_offset = segment.p_offset as usize + section_offset - misalign;
             let addr = arch::mmu::Virtual::new(page);
 
-            let mut frame = memory
-                .allocate_zeroed_page()
-                .expect("Failed to allocate page");
+            let mut frame = pmm::allocate_frame(pmm::AllocationFlags::ZEROED)
+                .expect("Failed to allocate zeroed page");
 
             // Map the page into the thread's page table
             loop {
@@ -41,9 +42,8 @@ pub fn load(file: &[u8], memory: &mut arch::memory::UsableMemory) -> arch::threa
                     arch::mmu::Flags::empty(),
                 ) {
                     Err(arch::mmu::MapError::FrameConsumed) => {
-                        frame = memory
-                            .allocate_zeroed_page()
-                            .expect("Failed to allocate page");
+                        frame = pmm::allocate_frame(pmm::AllocationFlags::ZEROED)
+                            .expect("Failed to allocate zeroed page");
                     }
                     Err(e) => {
                         panic!("Failed to map page: {:?}", e);

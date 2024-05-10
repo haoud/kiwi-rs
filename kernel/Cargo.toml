@@ -6,6 +6,8 @@ edition = "2021"
 [dependencies]
 intrusive-collections = { version = "0.9.6", default-features = false }
 elf = { version = "0.7.4", default-features = false }
+
+bitflags = { workspace = true }
 config = { workspace = true }
 macros = { workspace = true }
 spin = { workspace = true }
