@@ -2,8 +2,11 @@
 #![no_main]
 
 pub mod elf;
+pub mod future;
 pub mod heap;
 pub mod pmm;
+
+extern crate alloc;
 
 /// The initial user-space process that will be executed by the kernel. This
 /// is the only user-space process that is started directly by the kernel.
@@ -24,9 +27,8 @@ static INIT: &[u8] = include_bytes!(
 #[no_mangle]
 pub fn kiwi(memory: arch::memory::UsableMemory) -> ! {
     pmm::setup(memory);
-    //heap::setup();
+    heap::setup();
+    future::setup();
 
-    arch::thread::execute(&mut elf::load(INIT));
-    log::debug!("Thread trapped back to kernel");
-    arch::cpu::freeze();
+    future::executor::run();
 }
