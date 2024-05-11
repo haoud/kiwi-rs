@@ -30,6 +30,9 @@ pub const KERNEL_START: usize = 0xFFFF_FFC0_0000_0000;
 /// The size of a page in bytes.
 pub const PAGE_SIZE: usize = 4096;
 
+/// The shift required to convert a byte address to a page address.
+pub const PAGE_SHIFT: usize = 12;
+
 /// Represents a page table. A page table is a data structure used by the
 /// processor to translate virtual addresses to physical addresses. The page
 /// table is composed of multiple levels, each level containing a number of
@@ -343,7 +346,10 @@ impl Entry {
         if self.is_leaf() || !self.present() {
             None
         } else {
-            Some(&mut *(translate_physical(self.address()).unwrap().0 as *mut Table))
+            Some(
+                &mut *(translate_physical(self.address()).unwrap().0
+                    as *mut Table),
+            )
         }
     }
 }

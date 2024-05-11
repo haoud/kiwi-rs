@@ -30,12 +30,6 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 #[init]
 #[no_mangle]
 unsafe extern "C" fn entry(hart: usize, device_tree: usize) -> ! {
-    // Clear the BSS section
-    let bss_start = core::ptr::addr_of!(__bss_start) as usize;
-    let bss_end = core::ptr::addr_of!(__bss_end) as usize;
-    let bss_size = bss_end - bss_start;
-    core::ptr::write_bytes(core::ptr::addr_of!(__bss_start) as *mut u8, 0, bss_size);
-
     // Setup the architecture-specific stuff and start the kernel
     crate::kiwi(super::setup(hart, device_tree as *const u8));
 }

@@ -1,5 +1,5 @@
 use crate::target::mmu::Table;
-pub use crate::target::mmu::PAGE_SIZE;
+pub use crate::target::mmu::{PAGE_SHIFT, PAGE_SIZE};
 use bitflags::bitflags;
 use core::ops::{Add, Sub};
 
