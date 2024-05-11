@@ -18,9 +18,9 @@ pub fn internal_frequency() -> u64 {
     crate::target::timer::internal_frequency()
 }
 
-/// The duration of a single internal tick, in nanoseconds. This will be the
-/// granularity of the timer, and the smallest unit of time that can be measured
-/// by the timer.
+/// The duration of a single internal tick, in nanoseconds. This will be
+/// the granularity of the timer, and the smallest unit of time that can
+/// be measured by the timer.
 #[must_use]
 pub fn internal_tick() -> u64 {
     crate::target::timer::internal_tick()

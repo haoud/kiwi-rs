@@ -45,9 +45,11 @@ pub fn setup(mut memory: arch::memory::UsableMemory) {
         .into_free_regions()
         .into_iter()
         .for_each(|memory_region| {
-            let end = arch::mmu::Physical::new(memory_region.start + memory_region.length)
-                .page_align_up()
-                .frame_idx();
+            let end = arch::mmu::Physical::new(
+                memory_region.start + memory_region.length,
+            )
+            .page_align_up()
+            .frame_idx();
             let start = arch::mmu::Physical::new(memory_region.start)
                 .page_align_up()
                 .frame_idx();
@@ -67,11 +69,15 @@ pub fn allocate_frame(flags: AllocationFlags) -> Option<arch::mmu::Physical> {
     allocate_range(1, flags)
 }
 
-/// Allocate a contiguous range of frames. Returns `None` if no contiguous range
-/// of frames is available. This does not mean that there are no free frames, but
-/// simply that there are no contiguous free frames (e.g. due to fragmentation).
+/// Allocate a contiguous range of frames. Returns `None` if no contiguous
+/// range of frames is available. This does not mean that there are no free
+/// frames, but simply that there are no contiguous free frames (e.g. due to
+/// fragmentation).
 #[must_use]
-pub fn allocate_range(count: usize, flags: AllocationFlags) -> Option<arch::mmu::Physical> {
+pub fn allocate_range(
+    count: usize,
+    flags: AllocationFlags,
+) -> Option<arch::mmu::Physical> {
     let mut bitmap = BITMAP
         .get()
         .expect("Physical memory bitmap not initialized")

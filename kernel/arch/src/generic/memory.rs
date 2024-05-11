@@ -10,11 +10,15 @@ pub struct UsableMemory {
 }
 
 impl UsableMemory {
-    /// Allocate an object using the available memory regions. It will update the
-    /// region list to reflect the allocation and will return a physical address
-    /// that can be used to store the object.
+    /// Allocate an object using the available memory regions. It will update
+    /// the region list to reflect the allocation and will return a physical
+    /// address that can be used to store the object.
     #[must_use]
-    pub fn allocate_memory<T>(&mut self, length: usize, align: usize) -> Option<Physical> {
+    pub fn allocate_memory<T>(
+        &mut self,
+        length: usize,
+        align: usize,
+    ) -> Option<Physical> {
         // Verify that the alignment given is at least the minimum alignment
         // required for the type T.
         if align < core::mem::align_of::<T>() {
@@ -53,9 +57,10 @@ impl UsableMemory {
         Some(Physical(region.start))
     }
 
-    /// Allocate a page of memory using the available memory regions. It will update
-    /// the region list to reflect the allocation and will return a pointer to the
-    /// allocated **physical** page. The page is guaranteed to be zeroed.
+    /// Allocate a page of memory using the available memory regions. It will
+    /// update the region list to reflect the allocation and will return a
+    /// pointer to the allocated **physical** page. The page is guaranteed to
+    /// be zeroed.
     #[must_use]
     pub fn allocate_zeroed_page(&mut self) -> Option<Physical> {
         let page = self.allocate_page()?;
@@ -69,16 +74,17 @@ impl UsableMemory {
         Some(page)
     }
 
-    /// Allocate a page of memory using the available memory regions. It will update
-    /// the region list to reflect the allocation and will return a pointer to the
-    /// allocated **physical** page.
+    /// Allocate a page of memory using the available memory regions. It will
+    /// update the region list to reflect the allocation and will return a
+    /// pointer to the allocated **physical** page.
     #[must_use]
     pub fn allocate_page(&mut self) -> Option<Physical> {
         self.allocate_memory::<[u8; 4096]>(4096, 4096)
     }
 
-    /// Find the last usable address in the memory regions. This address is guaranteed
-    /// to be page aligned. If no regions are available, the function will return 0.
+    /// Find the last usable address in the memory regions. This address is
+    /// guaranteed to be page aligned. If no regions are available, the
+    /// function will return 0.
     #[must_use]
     pub fn last_address(&self) -> mmu::Physical {
         // Find the region with the highest end address

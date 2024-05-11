@@ -1,7 +1,7 @@
-//! RISC-V64 Memory Management Unit implementation. Currently, this implementation
-//! only handle SV39 paging, which should be supported by all RISC-V64 systems and
-//! should be enough for most use cases. However, it is possible to add support for
-//! other paging modes in the future.
+//! RISC-V64 Memory Management Unit implementation. Currently, this
+//! implementation only handle SV39 paging, which should be supported by all
+//! RISC-V64 systems and should be enough for most use cases. However, it is
+//! possible to add support for other paging modes in the future.
 use crate::mmu::{Flags, MapError, Physical, Rights, UnmapError, Virtual};
 use bitflags::bitflags;
 use core::ops::{Index, IndexMut};
@@ -19,12 +19,13 @@ static KERNEL_TABLE: spin::Mutex<Table> = spin::Mutex::new(Table::empty());
 pub const KERNEL_VIRTUAL_BASE: Virtual = Virtual(0xFFFF_FFFF_C000_0000);
 
 /// The physical address where the RAM starts. This address will be mapped
-/// to the kernel's address space at the address defined by `KERNEL_VIRTUAL_BASE`.
+/// to the kernel's address space at the address defined by
+/// `KERNEL_VIRTUAL_BASE`.
 pub const KERNEL_PHYSICAL_BASE: Physical = Physical(0x8000_0000);
 
-/// The start of ther kernel's address space. This corresponds to the first address
-/// after the 'canonical hole' in the virtual address space and goes up to the last
-/// address of the virtual address space.
+/// The start of ther kernel's address space. This corresponds to the first
+/// address after the 'canonical hole' in the virtual address space and goes
+/// up to the last address of the virtual address space.
 pub const KERNEL_START: usize = 0xFFFF_FFC0_0000_0000;
 
 /// The size of a page in bytes.
@@ -43,22 +44,23 @@ pub const PAGE_SHIFT: usize = 12;
 /// Currently, Kiwi only supports the SV39 paging mode, which uses 3 levels
 /// of page tables and 512 entries per level.
 ///
-/// To determine if a level of the page table is a leaf level or an intermediate
-/// level, the processor checks if any of the read, write or execute bits are
-/// set in the entry. If any of these bits are set, the level is a leaf level.
+/// To determine if a level of the page table is a leaf level or an
+/// intermediate level, the processor checks if any of the read, write
+/// or execute bits are set in the entry. If any of these bits are set,
+/// the level is a leaf level.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[repr(align(4096))]
 pub struct Table([Entry; 512]);
 
 impl Table {
-    /// Create a new empty page table. An empty page table is a table where all
-    /// entries are missing, meaning that they do not point to a physical address
-    /// and are not present in the page table.
+    /// Create a new empty page table. An empty page table is a table where
+    /// all entries are missing, meaning that they do not point to a physical
+    /// address and are not present in the page table.
     ///
     /// # Warning
-    /// This function should only be used to initialize static variables ! Trying
-    /// to create a new empty page table at runtime will result in a stack overflow,
-    /// as the stack is 4 KiB large by default.
+    /// This function should only be used to initialize static variables !
+    /// Trying to create a new empty page table at runtime will result in a
+    /// stack overflow, as the stack is 4 KiB large by default.
     #[must_use]
     pub const fn empty() -> Self {
         Self([Entry::missing(); 512])
@@ -67,9 +69,9 @@ impl Table {
     /// Set all the user-accessible entries of the table to zero and copy the
     /// kernel address space into the table.
     ///
-    /// If any of the user-accessible entries was pointer to a valid table or a
-    /// valid page, this will lead to the memory leak of the entire table and its
-    /// sub-tables or pages.
+    /// If any of the user-accessible entries was pointer to a valid table or
+    /// a valid page, this will lead to the memory leak of the entire table
+    /// and its sub-tables or pages.
     pub fn setup_from_kernel_space(&mut self) {
         let table = KERNEL_TABLE.lock();
         for i in 0..256 {
@@ -83,11 +85,11 @@ impl Table {
     /// Set the current page table to this table.
     ///
     /// # Safety
-    /// This function is unsafe because it can cause undefined behavior if the
-    /// table is not properly initialized. The caller must ensure that the table
-    /// given will not cause an instant page fault when set as the current page
-    /// table, and must ensure that the table will remain in memory while it is
-    /// set as the current page table.
+    /// This function is unsafe because it can cause undefined behavior if
+    /// the table is not properly initialized. The caller must ensure that
+    /// the table given will not cause an instant page fault when set as
+    /// the current page table, and must ensure that the table will remain
+    /// in memory while it is set as the current page table.
     pub unsafe fn set_current(&self) {
         let ppn = translate_kernel_ptr(self).0 >> 12;
         riscv::register::satp::set(riscv::register::satp::Mode::Sv39, 0, ppn);
@@ -121,17 +123,18 @@ impl Entry {
         Self(0)
     }
 
-    /// Create a new entry that points to a physical address. However, this entry
-    /// will not have any flags set, meaning that it is not present in the page table
-    /// and trying to access it will raise an exception.
+    /// Create a new entry that points to a physical address. However, this
+    /// entry will not have any flags set, meaning that it is not present in
+    /// the page table and trying to access it will raise an exception.
     ///
-    /// Furthermore, the physical address must be properly aligned, depending on the
-    /// level of the page table that this entry is part of. For example, if this entry
-    /// is part of the first level of the page table, the physical address must be
-    /// aligned to 0x1000 (4 KiB). If this entry is part of the second level of the
-    /// page table, the physical address must be aligned to 0x200000 (2 MiB). And if
-    /// this entry is part of the third level of the page table, the physical address
-    /// must be aligned to 0x40000000 (1 GiB).
+    /// Furthermore, the physical address must be properly aligned, depending
+    /// on the level of the page table that this entry is part of. For example,
+    /// if this entry is part of the first level of the page table, the
+    /// physical address must be aligned to 0x1000 (4 KiB). If this entry is
+    /// part of the second level of the page table, the physical address must
+    /// be aligned to 0x200000 (2 MiB). And if this entry is part of the third
+    /// level of the page table, the physical address must be aligned to
+    /// 0x40000000 (1 GiB).
     #[must_use]
     pub const fn new(physical: Physical) -> Self {
         Self((physical.0 as u64 & !0x3FF) >> 2)
@@ -150,9 +153,10 @@ impl Entry {
         self.set_global(flags.contains(Flags::GLOBAL));
     }
 
-    /// Set or clear the present bit of the entry. If this bit is set, the page is
-    /// mapped to a physical address. If this bit is not set, the page is not mapped
-    /// to a physical address and trying to access it will raise an exception.
+    /// Set or clear the present bit of the entry. If this bit is set, the
+    /// page is mapped to a physical address. If this bit is not set, the page
+    /// is not mapped to a physical address and trying to access it will raise
+    /// an exception.
     pub fn set_present(&mut self, present: bool) {
         if present {
             self.0 |= EntryFlags::PRESENT.bits();
@@ -161,10 +165,10 @@ impl Entry {
         }
     }
 
-    /// Set or clear the readable bit of the entry. If this bit is set, the page can
-    /// be read from by the processor. If this bit is not set, the page cannot be read
-    /// from by the processor. Trying to read from a page that is not readable will
-    /// raise an exception.
+    /// Set or clear the readable bit of the entry. If this bit is set, the
+    /// page can be read from by the processor. If this bit is not set, the
+    /// page cannot be read from by the processor. Trying to read from a page
+    /// that is not readable will raise an exception.
     pub fn set_readable(&mut self, readable: bool) {
         if readable {
             self.0 |= EntryFlags::READABLE.bits();
@@ -173,10 +177,10 @@ impl Entry {
         }
     }
 
-    /// Set or clear the writable bit of the entry. If this bit is set, the page can
-    /// be written to by the processor. If this bit is not set, the page cannot be
-    /// written to by the processor. Trying to write to a page that is not writable
-    /// will raise an exception.
+    /// Set or clear the writable bit of the entry. If this bit is set, the
+    /// page can be written to by the processor. If this bit is not set, the
+    /// page cannot be written to by the processor. Trying to write to a page
+    /// that is not writable will raise an exception.
     pub fn set_writable(&mut self, writable: bool) {
         if writable {
             self.0 |= EntryFlags::WRITABLE.bits();
@@ -185,10 +189,10 @@ impl Entry {
         }
     }
 
-    /// Set or clear the executable bit of the entry. If this bit is set, the page can
-    /// be executed by the processor. If this bit is not set, the page cannot be executed
-    /// by the processor. Trying to execute a page that is not executable will raise an
-    /// exception.
+    /// Set or clear the executable bit of the entry. If this bit is set, the
+    /// page can be executed by the processor. If this bit is not set, the page
+    /// cannot be executed by the processor. Trying to execute a page that is
+    /// not executable will raise an exception.
     pub fn set_executable(&mut self, executable: bool) {
         if executable {
             self.0 |= EntryFlags::EXECUTABLE.bits();
@@ -197,9 +201,10 @@ impl Entry {
         }
     }
 
-    /// Set or clear the user bit of the entry. If this bit is set, the entry can be
-    /// accessed by the user mode of the processor. If this bit is not set, the entry
-    /// can only be accessed by the supervisor or machine mode of the processor.
+    /// Set or clear the user bit of the entry. If this bit is set, the entry
+    /// can be accessed by the user mode of the processor. If this bit is not
+    /// set, the entry can only be accessed by the supervisor or machine mode
+    /// of the processor.
     pub fn set_user(&mut self, user: bool) {
         if user {
             self.0 |= EntryFlags::USER.bits();
@@ -208,10 +213,11 @@ impl Entry {
         }
     }
 
-    /// Set or clear the global bit of the entry. If this bit is set, the entry will
-    /// not be flushed from the TLB when changing the address space. This bit should
-    /// only be set if the page is shared between all address spaces, otherwise it may
-    /// lead to security issues or strange bugs that will be very, very hard to debug.
+    /// Set or clear the global bit of the entry. If this bit is set, the
+    /// entry will not be flushed from the TLB when changing the address
+    /// space. This bit should only be set if the page is shared between all
+    /// address spaces, otherwise it may lead to security issues or strange
+    /// bugs that will be very, very hard to debug.
     pub fn set_global(&mut self, global: bool) {
         if global {
             self.0 |= EntryFlags::GLOBAL.bits();
@@ -238,109 +244,113 @@ impl Entry {
         }
     }
 
-    /// Set the physical address that the entry points to. The physical address must
-    /// be properly aligned, depending on the level of the page table that this entry
-    /// is part of.
+    /// Set the physical address that the entry points to. The physical address
+    /// must be properly aligned, depending on the level of the page table that
+    /// this entry is part of.
     pub fn set_address(&mut self, physical: Physical) {
         self.0 &= 0x3FF;
         self.0 |= (physical.0 as u64 & !0xFFF) >> 2;
     }
 
-    /// Check if the entry is present, meaning that the page is mapped to a physical
-    /// address. If this bit is not set, the page is not mapped to a physical address
-    /// and trying to access it will raise an exception.
+    /// Check if the entry is present, meaning that the page is mapped to a
+    /// physical address. If this bit is not set, the page is not mapped to
+    /// a physical address and trying to access it will raise an exception.
     #[must_use]
     pub fn present(&self) -> bool {
         self.0 & EntryFlags::PRESENT.bits() != 0
     }
 
-    /// Check if the entry is readable, meaning that the page can be read from by the
-    /// processor. If this bit is not set, the page cannot be read from by the processor.
-    /// Trying to read from a page that is not readable will raise an exception.
+    /// Check if the entry is readable, meaning that the page can be read from
+    /// by the processor. If this bit is not set, the page cannot be read from
+    /// by the processor. Trying to read from a page that is not readable will
+    /// raise an exception.
     #[must_use]
     pub fn readable(&self) -> bool {
         self.0 & EntryFlags::READABLE.bits() != 0
     }
 
-    /// Check if the entry is writable, meaning that the page can be written to by
-    /// the processor. If this bit is not set, the page cannot be written to by the
-    /// processor. Trying to write to a page that is not writable will raise an
-    /// exception.
+    /// Check if the entry is writable, meaning that the page can be written to
+    /// by the processor. If this bit is not set, the page cannot be written to
+    /// by the processor. Trying to write to a page that is not writable will
+    /// raise an exception.
     #[must_use]
     pub fn writable(&self) -> bool {
         self.0 & EntryFlags::WRITABLE.bits() != 0
     }
 
-    /// Check if the entry is executable, meaning that the page can be executed by
-    /// the processor. If this bit is not set, the page cannot be executed by the
-    /// processor. Trying to execute a page that is not executable will raise an
-    /// exception.
+    /// Check if the entry is executable, meaning that the page can be executed
+    /// by the processor. If this bit is not set, the page cannot be executed
+    /// by the processor. Trying to execute a page that is not executable will
+    /// raise an exception.
     #[must_use]
     pub fn executable(&self) -> bool {
         self.0 & EntryFlags::EXECUTABLE.bits() != 0
     }
 
-    /// Check if the entry is accessible by the user, meaning that it can be accessed
-    /// by the user mode of the processor. If this bit is not set, the entry can only
-    /// be accessed by the supervisor or machine mode of the processor.
+    /// Check if the entry is accessible by the user, meaning that it can be
+    /// accessed by the user mode of the processor. If this bit is not set,
+    /// the entry can only be accessed by the supervisor or machine mode of
+    /// the processor.
     #[must_use]
     pub fn user(&self) -> bool {
         self.0 & EntryFlags::USER.bits() != 0
     }
 
-    /// Check if the entry is global, meaning that it is not flushed from the TLB
-    /// when changing the address space.
+    /// Check if the entry is global, meaning that it is not flushed from the
+    /// TLB when changing the address space.
     #[must_use]
     pub fn global(&self) -> bool {
         self.0 & EntryFlags::GLOBAL.bits() != 0
     }
 
-    /// Check if the entry was accessed, meaning that the page was read from or
-    /// written to. This bit is set by the processor when a read access is made to
-    /// the page, but is never cleared by the processor: it must be cleared by the OS.
+    /// Check if the entry was accessed, meaning that the page was read from
+    /// or written to. This bit is set by the processor when a read access is
+    /// made to the page, but is never cleared by the processor: it must be
+    /// cleared by the OS.
     #[must_use]
     pub fn accessed(&self) -> bool {
         self.0 & EntryFlags::ACCESSED.bits() != 0
     }
 
-    /// Check if the entry is dirty, meaning that the page was written to. This bit
-    /// is set by the processor when a write access is made to the page, but is never
-    /// cleared by the processor: it must be cleared by the OS.
+    /// Check if the entry is dirty, meaning that the page was written to. This
+    /// bit is set by the processor when a write access is made to the page,
+    /// but is never cleared by the processor: it must be cleared by the OS.
     #[must_use]
     pub fn dirty(&self) -> bool {
         self.0 & EntryFlags::DIRTY.bits() != 0
     }
 
-    /// Return the physical address that the entry points to. This method does not
-    /// check if the entry is present, and calling this method on an entry that is
-    /// not present will return incorrect results.
+    /// Return the physical address that the entry points to. This method does
+    /// not check if the entry is present, and calling this method on an entry
+    /// that is not present will return incorrect results.
     #[must_use]
     pub fn address(&self) -> Physical {
         Physical((self.0 as usize & !0x3FF) << 2)
     }
 
-    /// Check if the entry is a leaf entry, meaning that it points to a physical
-    /// address and not to another table.
+    /// Check if the entry is a leaf entry, meaning that it points to a
+    /// physical address and not to another table.
     #[must_use]
     pub fn is_leaf(&self) -> bool {
         self.readable() | self.writable() | self.executable()
     }
 
-    /// Clear the entry, meaning that it does not point to a physical address and
-    /// does not have any flags set.
+    /// Clear the entry, meaning that it does not point to a physical address
+    /// and does not have any flags set.
     pub fn clear(&mut self) {
         self.0 = 0;
     }
 
-    /// Get the next table from the entry. If the entry is a leaf entry or is not
-    /// present, this method will return `None`.
+    /// Get the next table from the entry. If the entry is a leaf entry or is
+    /// not present, this method will return `None`.
     ///
     /// # Safety
-    /// This function assume that the entry points to a valid physical address that
-    /// will be translated to a valid virtual address that contains a valid table.
+    /// This function assume that the entry points to a valid physical address
+    /// that will be translated to a valid virtual address that contains a
+    /// valid table.
     ///
-    /// If the address is not valid or points to another object, the behavior is
-    /// undefined and may lead to memory corruption or data loss.
+    /// If the address is not valid or points to another object, the behavior
+    /// is undefined and may lead to memory corruption or data loss.
     #[must_use]
     pub unsafe fn next_table_mut(&self) -> Option<&mut Table> {
         if self.is_leaf() || !self.present() {
@@ -375,19 +385,19 @@ bitflags! {
         const USER = 1 << 4;
 
         /// The entry is global and should not be flushed from the TLB.
-        /// This must be only used if a page is shared between all address spaces,
-        /// otherwise it may lead to security issues or strange bugs that will be very,
-        /// very hard to debug.
+        /// This must be only used if a page is shared between all address
+        /// spaces, otherwise it may lead to security issues or strange bugs
+        /// that will be very, very hard to debug.
         const GLOBAL = 1 << 5;
 
-        /// The entry was accessed. This bit is set by the processor when a read access
-        /// is made to the page, but is never cleared by the processor: it must be cleared
-        /// by the OS.
+        /// The entry was accessed. This bit is set by the processor when a
+        /// read access is made to the page, but is never cleared by the
+        /// processor: it must be cleared by the OS.
         const ACCESSED = 1 << 6;
 
-        /// The entry was written to. This bit is set by the processor when a write access
-        /// is made to the page, but is never cleared by the processor: it must be cleared
-        /// by the OS.
+        /// The entry was written to. This bit is set by the processor when a
+        /// write access is made to the page, but is never cleared by the
+        /// processor: it must be cleared by the OS.
         const DIRTY = 1 << 7;
     }
 }
@@ -399,23 +409,23 @@ impl Virtual {
     /// Create a new virtual address from the given address.
     ///
     /// # Panics
-    /// This function will panic if the given address is greater than the maximum
-    /// virtual address representable by the system ([`Virtual::MAX`]).
+    /// This function will panic if the given address is greater than the
+    /// maximum virtual address representable by the system ([`Virtual::MAX`]).
     #[must_use]
     pub const fn new(address: usize) -> Self {
         // FIXME: Check if the address is canonical
         Self(address)
     }
 
-    /// Align the virtual address to the nearest multiple of the given alignment,
-    /// rounding it up.
+    /// Align the virtual address to the nearest multiple of the given
+    /// alignment, rounding it up if necessary.
     #[must_use]
     pub fn page_align_up(&self) -> Self {
         self.align_up(Self::PAGE_SIZE)
     }
 
-    /// Align the virtual address to the current page size, rounding it down to the
-    /// nearest page boundary.
+    /// Align the virtual address to the current page size, rounding it down
+    /// to the nearest page boundary if necessary.
     #[must_use]
     pub fn page_align_down(&self) -> Self {
         self.align_down(Self::PAGE_SIZE)
@@ -439,23 +449,23 @@ impl Physical {
     /// Create a new physical address from the given address.
     ///
     /// # Panics
-    /// This function will panic if the given address is greater than the maximum
-    /// physical address representable by the system ([`Physical::MAX`]).
+    /// This function will panic if the given address is greater than the
+    /// maximum physical address representable by the system ([`Physical::MAX`]).
     #[must_use]
     pub const fn new(address: usize) -> Self {
         assert!(address <= Self::MAX.0, "Physical address is out of bounds");
         Self(address)
     }
 
-    /// Align the physical address to the nearest multiple of the given alignment,
-    /// rounding it up.
+    /// Align the physical address to the nearest multiple of the given
+    /// alignment, rounding it up.
     #[must_use]
     pub fn page_align_up(&self) -> Self {
         self.align_up(Self::PAGE_SIZE)
     }
 
-    /// Align the physical address to the current page size, rounding it down to the
-    /// nearest page boundary.
+    /// Align the physical address to the current page size, rounding it down
+    /// to the nearest page boundary.
     #[must_use]
     pub fn page_align_down(&self) -> Self {
         self.align_down(Self::PAGE_SIZE)
@@ -468,10 +478,10 @@ impl Physical {
     }
 }
 
-/// Setup the MMU. This will create a kernel page table that identity maps the first
-/// 256 GiB of physical memory to the first 256 GiB of virtual memory. This will
-/// allow the kernel to access the physical memory of the system without having to
-/// manually map each page.
+/// Setup the MMU. This will create a kernel page table that identity maps the
+/// first 256 GiB of physical memory to the first 256 GiB of virtual memory.
+/// This will allow the kernel to access the physical memory of the system
+/// without having to manually map each page.
 pub fn setup() {
     let mut table = KERNEL_TABLE.lock();
 
@@ -541,8 +551,8 @@ pub fn map(
                 // Use the frame that was given to us to create the next table.
                 // FIXME: However, I'm not sure if it is a good idea to consume
                 // the frame like this. What if the frame passed to us is not
-                // regular memory, but a framebuffer or a MMIO device ? We should
-                // probably return an error in this case.
+                // regular memory, but a framebuffer or a MMIO device ? We
+                // should probably return an error in this case.
                 // FIXME: Zero the frame
                 entry.set_address(phys);
                 entry.set_present(true);
@@ -605,15 +615,17 @@ pub fn unmap(root: &mut Table, virt: Virtual) -> Result<Physical, UnmapError> {
     Ok(address)
 }
 
-/// Translate a physical address to a virtual address. If the translation cannot be
-/// done because the physical address is greater than the maximum virtual address
-/// representable by the system, this function will return `None`.
+/// Translate a physical address to a virtual address. If the translation
+/// cannot be done because the physical address is greater than the maximum
+/// virtual address representable by the system, this function will return
+/// `None`.
 #[must_use]
 pub fn translate_physical(phys: Physical) -> Option<Virtual> {
     Some(Virtual::new(KERNEL_START + phys.0))
 }
 
-/// Translate a virtual address in the kernel's address space to a physical address.
+/// Translate a virtual address in the kernel's address space to a physical
+/// address.
 ///
 /// # Panics
 /// Panics if the virtual address is not located in the kernel's address space,

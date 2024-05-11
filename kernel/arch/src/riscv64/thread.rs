@@ -7,9 +7,9 @@ extern "C" {
 }
 
 /// A thread is a sequence of instructions that can be executed independently
-/// of other code. On RISC-V, a thread is represented by a `Context` that contains
-/// a copy of all the registers and a `Table` that contains the page table of the
-/// thread.
+/// of other code. On RISC-V, a thread is represented by a `Context` that
+/// contains a copy of all the registers and a `Table` that contains the page
+/// table of the thread.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Thread {
     context: trap::Context,

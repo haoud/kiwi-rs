@@ -26,7 +26,7 @@ pub fn setup(hart: usize, device_tree: *const u8) -> UsableMemory {
     // SAFETY: We must assume that the device tree pointer is valid
     let fdt = unsafe {
         fdt::Fdt::from_ptr(device_tree)
-            .expect("Failed to parse the device tree : cannot continue without this !")
+            .expect("Failed to parse the device tree")
     };
 
     let memory = UsableMemory::new(&fdt);

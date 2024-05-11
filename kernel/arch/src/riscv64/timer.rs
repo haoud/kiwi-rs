@@ -27,17 +27,18 @@ pub fn shutdown() {
     _ = sbi::timer::set_timer(u64::MAX);
 }
 
-/// Set the next timer trigger to the given duration from now. An interrupt will
-/// be raised when the timer will reach the given duration.
+/// Set the next timer trigger to the given duration from now. An interrupt
+/// will be raised when the timer will reach the given duration.
 pub fn next_event(next: core::time::Duration) {
-    // Convert the duration to nanoseconds. It should fit in a u64 and should
-    // be enough to represent the time until the next trigger.
+    // Convert the duration to nanoseconds. It should fit in a
+    // u64 and should be enough to represent the time until the
+    // next trigger.
     let nano = u64::try_from(next.as_nanos())
         .expect("Duration in nanoseconds is too large to to fit in a u64");
 
-    // Read the current clock value and add the duration to it. It convert
-    // the duration to the clock internal ticks and set the timer to the
-    // new value using the SBI.
+    // Read the current clock value and add the duration to it.
+    // It convert the duration to the clock internal ticks and
+    // set the timer to the new value using the SBI.
     let current = riscv::register::time::read64();
     let next = current + nano / internal_tick();
     sbi::timer::set_timer(next).unwrap();

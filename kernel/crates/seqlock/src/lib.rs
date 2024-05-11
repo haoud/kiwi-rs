@@ -1,26 +1,27 @@
-//! A sequential lock, also known as a seqlock, is a synchronization primitive that
-//! allows for fast reads and writes to a shared data structure. The seqlock is
-//! similar to a spinlock, but it allows for concurrent reads and writes to the
-//! data structure.
+//! A sequential lock, also known as a seqlock, is a synchronization primitive
+//! that allows for fast reads and writes to a shared data structure. The
+//! seqlock is similar to a spinlock, but it allows for concurrent reads and
+//! writes to the data structure.
 //!
-//! The seqlock is implemented using a sequence number that is incremented before
-//! and after writing to the data structure. When reading the data structure, the
-//! sequence number is checked to ensure that the data is consistent and was not
-//! modified during the read. If the data is being written to, the reader will spin
-//! until the write is complete. If the read was interleaved with a write, the reader
-//! will retry the read until it is consistent.
+//! The seqlock is implemented using a sequence number that is incremented
+//! before and after writing to the data structure. When reading the data
+//! structure, the sequence number is checked to ensure that the data is
+//! consistent and was not modified during the read. If the data is being
+//! written to, the reader will spin until the write is complete. If the read
+//! was interleaved with a write, the reader will retry the read until it is
+//! consistent.
 //!
 //! # Unsoudness
-//! Currently, the implementation of the `SeqLock` is unsound, because it uses an
-//! implementation that is not allowed in Rust. The implementation uses volatile
+//! Currently, the implementation of the `SeqLock` is unsound, because it uses
+//! an implementation that is not allowed in Rust. The implementation uses
 //! volatile reads and writes to the data structure. This is undefined behavior
 //! in Rust, because it can lead to data races. However, the implementation
 //! ensures that the data race will not be reflected to the user, because the
 //! sequence number is used to ensure that the read is consistent and was not
 //! modified during the read. The implementation is widely used in the Linux
-//! kernel, and should be safe in practice. The unsoundness is a known issue, and
-//! will be fixed in a future version of the crate, maybe when atomic memcpy will
-//! be available in Rust.
+//! kernel, and should be safe in practice. The unsoundness is a known issue,
+//! and will be fixed in a future version of the crate, maybe when atomic
+//! memcpy will be available in Rust.
 #![no_std]
 
 use core::{
@@ -113,8 +114,11 @@ impl<T: Copy> SeqLock<T> {
             // be concurrently modified by the writer.
             // SAFETY: Actually, the line below is UB ^^'... But works in
             // practice, and is widely used in the linux kernel.
-            let data =
-                unsafe { core::ptr::read_volatile::<MaybeUninit<T>>(self.data.get().cast()) };
+            let data = unsafe {
+                core::ptr::read_volatile::<MaybeUninit<T>>(
+                    self.data.get().cast(),
+                )
+            };
 
             // Make sure that the second read of the sequence number happens
             // after the read of the data. Ideally, we would use `Release`

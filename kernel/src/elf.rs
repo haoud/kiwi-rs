@@ -3,13 +3,14 @@ use crate::pmm;
 /// Load an ELF file into memory and return a thread that can be executed.
 ///
 /// # Safety
-/// This function should only be called once to initialize thread during the boot
-/// process. After the boot process, the memory used by this function will be
-/// reclaimed by the kernel to reuse it for other purposes.
+/// This function should only be called once to initialize thread during
+/// the boot process. After the boot process, the memory used by this
+/// function will be reclaimed by the kernel to reuse it for other purposes.
 #[macros::init]
 pub fn load(file: &[u8]) -> arch::thread::Thread {
-    let header = elf::ElfBytes::<elf::endian::LittleEndian>::minimal_parse(file)
-        .expect("Failed to parse ELF file");
+    let header =
+        elf::ElfBytes::<elf::endian::LittleEndian>::minimal_parse(file)
+            .expect("Failed to parse ELF file");
     let entry = header.ehdr.e_entry as usize;
 
     let mut thread = arch::thread::create(entry, 0);
@@ -26,7 +27,8 @@ pub fn load(file: &[u8]) -> arch::thread::Thread {
 
         for page in (start..start + memsize).step_by(arch::mmu::PAGE_SIZE) {
             let section_offset = page - start;
-            let file_offset = segment.p_offset as usize + section_offset - misalign;
+            let file_offset =
+                segment.p_offset as usize + section_offset - misalign;
             let addr = arch::mmu::Virtual::new(page);
 
             let mut frame = pmm::allocate_frame(pmm::AllocationFlags::ZEROED)
@@ -42,8 +44,9 @@ pub fn load(file: &[u8]) -> arch::thread::Thread {
                     arch::mmu::Flags::empty(),
                 ) {
                     Err(arch::mmu::MapError::FrameConsumed) => {
-                        frame = pmm::allocate_frame(pmm::AllocationFlags::ZEROED)
-                            .expect("Failed to allocate zeroed page");
+                        frame =
+                            pmm::allocate_frame(pmm::AllocationFlags::ZEROED)
+                                .expect("Failed to allocate zeroed page");
                     }
                     Err(e) => {
                         panic!("Failed to map page: {:?}", e);
@@ -52,8 +55,8 @@ pub fn load(file: &[u8]) -> arch::thread::Thread {
                 }
             }
 
-            // Compute the size of the data to copy into the physical page
-            // and compute the source and destination pointers
+            // Compute the size of the data to copy into the physical
+            // page and compute the source and destination pointers
             let remaning = filesize.saturating_sub(section_offset);
             let size = core::cmp::min(arch::mmu::PAGE_SIZE, remaning);
             let src = file.as_ptr().wrapping_add(file_offset);
