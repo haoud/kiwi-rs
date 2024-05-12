@@ -20,15 +20,30 @@ pub fn load(file: &[u8]) -> arch::thread::Thread {
         .iter()
         .filter(|phdr| phdr.p_type == elf::abi::PT_LOAD)
     {
-        let misalign = segment.p_vaddr as usize % arch::mmu::PAGE_SIZE;
-        let start = segment.p_vaddr as usize - misalign;
-        let filesize = segment.p_filesz as usize;
-        let memsize = segment.p_memsz as usize;
+        let segment_mem_size = segment.p_memsz as usize;
+        let segment_mem_start = segment.p_vaddr as usize;
+        let segment_file_size = segment.p_filesz as usize;
+        let segment_mem_end = segment_mem_start + segment_mem_size;
 
-        for page in (start..start + memsize).step_by(arch::mmu::PAGE_SIZE) {
-            let section_offset = page - start;
-            let file_offset =
-                segment.p_offset as usize + section_offset - misalign;
+        // Compute the aligned memory start address and the misalignment of the
+        // segment in memory
+        let mut misalign = segment_mem_start % arch::mmu::PAGE_SIZE;
+        let segment_aligned_mem_start = segment_mem_start - misalign;
+
+        // Map each page in the segment into the thread's page table. If the
+        // start address of the segment is not page aligned, the first page
+        // will be partially filled with data from the ELF file and the rest
+        // of the page will handled normally.
+        for page in (segment_aligned_mem_start..segment_mem_end)
+            .step_by(arch::mmu::PAGE_SIZE)
+        {
+            let section_offset = page + misalign - segment_mem_start;
+            let file_offset = segment.p_offset as usize + section_offset;
+            log::trace!(
+                "Mapping page 0x{:x} with offset 0x{:x}",
+                page,
+                file_offset
+            );
             let addr = arch::mmu::Virtual::new(page);
 
             let mut frame = pmm::allocate_frame(pmm::AllocationFlags::ZEROED)
@@ -57,17 +72,21 @@ pub fn load(file: &[u8]) -> arch::thread::Thread {
 
             // Compute the size of the data to copy into the physical
             // page and compute the source and destination pointers
-            let remaning = filesize.saturating_sub(section_offset);
-            let size = core::cmp::min(arch::mmu::PAGE_SIZE, remaning);
+            let remaning = segment_file_size.saturating_sub(section_offset);
+            let size =
+                core::cmp::min(arch::mmu::PAGE_SIZE - misalign, remaning);
             let src = file.as_ptr().wrapping_add(file_offset);
             let dst = arch::mmu::translate_physical(frame)
                 .unwrap()
-                .as_mut_ptr::<u8>();
+                .as_mut_ptr::<u8>()
+                .wrapping_add(misalign);
 
             // Copy the data into the physical page
             unsafe {
                 core::ptr::copy_nonoverlapping(src, dst, size);
             }
+
+            misalign = 0;
         }
     }
 

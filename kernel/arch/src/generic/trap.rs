@@ -90,3 +90,11 @@ pub enum Syscall {
     /// No operation syscall, used for testing purposes.
     Nop = 0,
 }
+
+pub fn handle_exception(thread: &mut crate::thread::Thread) -> Resume {
+    crate::target::trap::handle_exception(thread)
+}
+
+pub fn handle_interrupt(thread: &mut crate::thread::Thread) -> Resume {
+    crate::target::trap::handle_interrupt(thread)
+}

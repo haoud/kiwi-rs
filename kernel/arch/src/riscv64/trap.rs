@@ -1,7 +1,5 @@
-use riscv::register::{
-    scause::{Interrupt, Trap},
-    stvec::TrapMode,
-};
+use crate::{thread::Thread, trap::Resume};
+use riscv::register::stvec::TrapMode;
 
 core::arch::global_asm!(include_str!("asm/trap.asm"));
 
@@ -12,7 +10,7 @@ extern "C" {
 /// The context of the trap. This struct is used to store the state
 /// of the CPU when the trap occured.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[repr(C)]
+#[repr(C, align(16))]
 pub struct Context {
     registers: [u64; 31],
     sstatus: u64,
@@ -43,7 +41,13 @@ impl Context {
 
     /// Set the instruction pointer.
     pub fn set_ip(&mut self, ip: usize) {
-        self.registers[0] = ip as u64;
+        self.sepc = ip as u64;
+    }
+}
+
+impl Default for Context {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -56,23 +60,24 @@ pub fn setup() {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn kernel_trap_handler() {
+pub fn handle_exception(thread: &mut Thread) -> Resume {
     let scause = riscv::register::scause::read();
     let stval = riscv::register::stval::read();
+    let sepc = riscv::register::sepc::read();
+    log::trace!(
+        "Exception: {:?}, stval: {:#x}, sepc: {:#x}",
+        scause.cause(),
+        stval,
+        sepc
+    );
+    Resume::Fault
+}
 
-    match scause.cause() {
-        Trap::Interrupt(Interrupt::SupervisorTimer) => {
-            // Reset the timer to avoid the interrupt to be
-            // triggered again after the handler returns.
-            _ = sbi::timer::set_timer(u64::MAX);
-        }
-        _ => {
-            log::warn!(
-                "Unhandled exception: {:?} (stval: {:#x})",
-                scause.cause(),
-                stval
-            );
-        }
-    }
+pub fn handle_interrupt(thread: &mut Thread) -> Resume {
+    Resume::Yield
+}
+
+#[no_mangle]
+pub extern "C" fn kernel_trap_handler() {
+    panic!("Kernel trap handler");
 }

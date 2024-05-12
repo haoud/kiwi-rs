@@ -554,6 +554,7 @@ pub fn map(
                 // regular memory, but a framebuffer or a MMIO device ? We
                 // should probably return an error in this case.
                 // FIXME: Zero the frame
+                entry.clear();
                 entry.set_address(phys);
                 entry.set_present(true);
                 return Err(MapError::FrameConsumed);
@@ -590,7 +591,7 @@ pub fn unmap(root: &mut Table, virt: Virtual) -> Result<Physical, UnmapError> {
     ];
 
     let mut entry = &mut root[vpn[2]];
-    for i in (0..1).rev() {
+    for i in (0..2).rev() {
         if !entry.present() {
             return Err(UnmapError::NotMapped);
         }

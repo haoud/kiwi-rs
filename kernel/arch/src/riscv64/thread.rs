@@ -29,6 +29,18 @@ impl Thread {
         }
     }
 
+    /// Return a mutable reference to the context of the thread.
+    #[must_use]
+    pub fn context_mut(&mut self) -> &mut trap::Context {
+        &mut self.context
+    }
+
+    /// Return a reference to the context of the thread.
+    #[must_use]
+    pub fn context(&self) -> &trap::Context {
+        &self.context
+    }
+
     /// Return a mutable reference to the page table of the thread.
     #[must_use]
     pub fn table_mut(&mut self) -> &mut mmu::Table {
