@@ -1,5 +1,9 @@
+use super::timer;
 use crate::{thread::Thread, trap::Resume};
-use riscv::register::stvec::TrapMode;
+use riscv::register::{
+    scause::{Exception, Interrupt, Trap},
+    stvec::TrapMode,
+};
 
 core::arch::global_asm!(include_str!("asm/trap.asm"));
 
@@ -60,21 +64,48 @@ pub fn setup() {
     }
 }
 
-pub fn handle_exception(thread: &mut Thread) -> Resume {
+pub fn handle_exception(_thread: &mut Thread) -> Resume {
     let scause = riscv::register::scause::read();
     let stval = riscv::register::stval::read();
     let sepc = riscv::register::sepc::read();
-    log::trace!(
-        "Exception: {:?}, stval: {:#x}, sepc: {:#x}",
-        scause.cause(),
-        stval,
-        sepc
-    );
-    Resume::Fault
+    match scause.cause() {
+        Trap::Exception(Exception::InstructionFault) => {
+            log::error!(
+                "Instruction fault: {:?} (stval: {:#x}, sepc: {:#x})",
+                scause.cause(),
+                stval,
+                sepc
+            );
+            Resume::Fault
+        }
+        _ => {
+            log::error!(
+                "Unhandled exception: {:?} (stval: {:#x}, sepc: {:#x})",
+                scause.cause(),
+                stval,
+                sepc
+            );
+            Resume::Fault
+        }
+    }
 }
 
-pub fn handle_interrupt(thread: &mut Thread) -> Resume {
-    Resume::Yield
+pub fn handle_interrupt(_thread: &mut Thread) -> Resume {
+    let scause = riscv::register::scause::read();
+    match scause.cause() {
+        Trap::Interrupt(Interrupt::SupervisorTimer) => {
+            // The timer interrupt is used to preempt the currently
+            // running thread and switch to the next one if the current
+            // thread has used up its time slice. Also disable the timer
+            // to avoid getting another interrupt while handling this one.
+            timer::shutdown();
+            Resume::Yield
+        }
+        _ => {
+            log::warn!("Unhandled interrupt: {:?}", scause.cause());
+            Resume::Continue
+        }
+    }
 }
 
 #[no_mangle]

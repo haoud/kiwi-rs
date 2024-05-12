@@ -19,3 +19,19 @@ pub const MAX_TASKS: u16 = 32;
 /// handle all the kernel operations, including nested interrupts and
 /// exceptions.
 pub const KERNEL_STACK_SIZE: usize = 4096;
+
+/// The number of milliseconds that a thread can run before being preempted
+/// by the scheduler if it has not yielded the CPU. This value is used to
+/// prevent a single thread from monopolizing the CPU.
+///
+/// The value of 25 milliseconds is chosen because it is a good balance
+/// between responsiveness and performance. A lower value would make the
+/// system more responsive, but it would also increase the number of context
+/// switches, which would reduce the overall throughput of the system and
+/// increase the overhead of the scheduler. A higher value would reduce the
+/// number of context switches and reduce the overhead of the scheduler, but
+/// it would also make the system less responsive.
+///
+/// Depending on the use case, this value can be adjusted to better fit the
+/// requirements of the system.
+pub const THREAD_QUANTUM: u64 = 25;
