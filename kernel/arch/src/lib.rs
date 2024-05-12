@@ -23,6 +23,9 @@
 //! to the kernel.
 #![no_std]
 #![allow(dead_code)]
+#![feature(panic_info_message)]
+
+extern crate alloc;
 
 #[cfg(target_arch = "riscv64")]
 mod riscv64;

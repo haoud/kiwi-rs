@@ -1,4 +1,3 @@
-use super::log;
 use macros::init;
 
 core::arch::global_asm!(include_str!("asm/boot.asm"));
@@ -14,13 +13,25 @@ extern "C" {
 /// `log` feature is enabled and then stop the kernel forever.
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
-    if let Some(message) = info.payload().downcast_ref::<&str>() {
-        log::write("Kernel panic: ");
-        log::write(message);
-        log::write(", exiting :(\n");
+    if let Some(location) = info.location() {
+        if let Some(message) = info.message() {
+            ::log::error!(
+                "Kernel panic at {}:{}: {}",
+                location.file(),
+                location.line(),
+                message
+            );
+        } else {
+            ::log::error!(
+                "Kernel panic at {}:{}",
+                location.file(),
+                location.line()
+            );
+        }
     } else {
-        log::write("Kernel panic, exiting :(\n");
+        ::log::error!("Kernel panic without location or message :(");
     }
+
     sbi::legacy::shutdown();
 }
 
