@@ -1,6 +1,10 @@
 use crate::future::{executor::Executor, waker::Waker};
 use alloc::boxed::Box;
-use core::{future::Future, pin::Pin};
+use core::{
+    future::Future,
+    pin::Pin,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 pub struct Task<'a> {
     /// The executor that owns the task.
@@ -59,16 +63,21 @@ impl<'a> Task<'a> {
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub struct Identifier {
-    id: u16,
+    id: usize,
 }
 
 impl Identifier {
     /// Creates a new task identifier.
     pub fn generate() -> Self {
-        static NEXT_ID: core::sync::atomic::AtomicU16 =
-            core::sync::atomic::AtomicU16::new(0);
+        static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
         Self {
-            id: NEXT_ID.fetch_add(1, core::sync::atomic::Ordering::Relaxed),
+            id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
         }
+    }
+}
+
+impl From<Identifier> for usize {
+    fn from(id: Identifier) -> usize {
+        id.id
     }
 }

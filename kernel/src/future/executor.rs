@@ -1,9 +1,8 @@
 use super::task::{self, Task};
+use super::user::thread_loop;
 use alloc::boxed::Box;
 use alloc::collections::BTreeMap;
 use crossbeam::queue::ArrayQueue;
-use futures::Future;
-use spin::Once;
 
 /// The global executor instance, used to run all user-space tasks. This
 /// executor replace the traditional term "scheduler" in the context of
@@ -13,7 +12,7 @@ use spin::Once;
 /// it allow to use cooperative multitasking inside the kernel with a single
 /// kernel stack per core. This is possible because a future will compile to
 /// a state machine that can be paused and resumed at specific points.
-static EXECUTOR: Once<Executor> = Once::new();
+static EXECUTOR: spin::Once<Executor> = spin::Once::new();
 
 /// The executor is responsible to run all user-space tasks. It behaves like
 /// a simple First-In-First-Out (FIFO) cooperative scheduler.
@@ -108,9 +107,9 @@ pub fn setup() {
 }
 
 /// Spawn a new future into the executor.
-pub fn spawn(future: impl Future<Output = ()> + Send + 'static) {
+pub fn spawn(thread: arch::thread::Thread) {
     let executor = EXECUTOR.get().expect("Executor not initialized");
-    let task = Task::new(executor, Box::pin(future));
+    let task = Task::new(executor, Box::pin(thread_loop(thread)));
     let id = task.id();
 
     // Insert the task into the tasks map. If the task identifier already

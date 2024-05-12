@@ -46,10 +46,10 @@ impl UsableMemory {
             .find(|region| region.length >= length * 2)
             .map(|region| {
                 // Align the start of the region
-                let align = align - (region.start % align);
+                let align = (align - (region.start % align)) % align;
                 let start = region.start + align;
-                region.start += align + length;
-                region.length -= align + length;
+                region.start += length + align;
+                region.length -= length + align;
                 Region { start, length }
             })?;
 

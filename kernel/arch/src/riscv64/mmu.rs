@@ -26,7 +26,7 @@ pub const KERNEL_PHYSICAL_BASE: Physical = Physical(0x8000_0000);
 /// The start of ther kernel's address space. This corresponds to the first
 /// address after the 'canonical hole' in the virtual address space and goes
 /// up to the last address of the virtual address space.
-pub const KERNEL_START: usize = 0xFFFF_FFC0_0000_0000;
+pub const KERNEL_START: Virtual = Virtual(0xFFFF_FFC0_0000_0000);
 
 /// The size of a page in bytes.
 pub const PAGE_SIZE: usize = 4096;
@@ -621,7 +621,7 @@ pub fn unmap(root: &mut Table, virt: Virtual) -> Result<Physical, UnmapError> {
 /// `None`.
 #[must_use]
 pub fn translate_physical(phys: Physical) -> Option<Virtual> {
-    Some(Virtual::new(KERNEL_START + phys.0))
+    Some(Virtual::new(KERNEL_START.0 + phys.0))
 }
 
 /// Translate a virtual address in the kernel's address space to a physical
@@ -629,10 +629,15 @@ pub fn translate_physical(phys: Physical) -> Option<Virtual> {
 ///
 /// # Panics
 /// Panics if the virtual address is not located in the kernel's address space,
-/// i.e. if it is not greater than or equal to `KERNEL_VIRTUAL_BASE`.
+/// i.e. if it is not greater than or equal to `KERNEL_START`.
 pub fn translate_virtual_kernel(virt: Virtual) -> Physical {
-    assert!(virt.0 >= KERNEL_VIRTUAL_BASE.0);
-    Physical::new(virt.0 - KERNEL_VIRTUAL_BASE.0 + KERNEL_PHYSICAL_BASE.0)
+    if virt.0 >= KERNEL_VIRTUAL_BASE.0 {
+        Physical::new(virt.0 - KERNEL_VIRTUAL_BASE.0 + KERNEL_PHYSICAL_BASE.0)
+    } else if virt.0 >= KERNEL_START.0 {
+        Physical::new(virt.0 - KERNEL_START.0)
+    } else {
+        panic!("Virtual address is not in the kernel's address space");
+    }
 }
 
 /// Translate a kernel pointer to a physical address.

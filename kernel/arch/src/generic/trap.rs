@@ -1,5 +1,3 @@
-use crate::target::trap::{ExceptionNr, InterruptNr};
-
 /// The stack used by the kernel to handle interrupts and exceptions. Kiwi
 /// has made the choice to use a single stack per core to handle interrupts
 /// instead of using a separate kernel stack for threads.
@@ -46,22 +44,44 @@ impl KernelStack {
     }
 }
 
+impl Default for KernelStack {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// The trap that caused the kernel to be interrupted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Trap {
     /// An interrupt, which is an asynchronous event. It is often
     /// triggered by a peripheral device, such as a timer, a network
     /// card, a keyboard...
-    Interrupt(InterruptNr),
+    Interrupt,
 
     /// An exception, which is a synchronous event triggered by the CPU
     /// when it encounters an error or an unexpected condition while
     /// executing an instruction.
-    Exception(ExceptionNr),
+    Exception,
 
     /// A syscall, which is a synchronous event directly triggered
     /// by the user-space application.
-    Syscall(Syscall),
+    Syscall,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Resume {
+    /// Continue the execution of the thread where it was interrupted.
+    Continue,
+
+    /// Terminate the execution of the thread. This is used when the
+    /// thread has finished its execution with an exit syscall.
+    Terminate(i32),
+
+    /// Yield the CPU to another thread.
+    Yield,
+
+    /// The thread has encountered a fault and should be terminated.
+    Fault,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -1,4 +1,7 @@
 use super::{mmu, trap};
+use crate::trap::Trap;
+use alloc::boxed::Box;
+use riscv::register::scause::{self, Exception};
 
 core::arch::global_asm!(include_str!("asm/thread.asm"));
 
@@ -12,17 +15,17 @@ extern "C" {
 /// table of the thread.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Thread {
-    context: trap::Context,
-    table: mmu::Table,
+    context: Box<trap::Context>,
+    table: Box<mmu::Table>,
 }
 
 impl Thread {
     /// Create a new thread with an empty page table.
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
-            context: trap::Context::new(),
-            table: mmu::Table::empty(),
+            context: Box::new(trap::Context::new()),
+            table: Box::new(mmu::Table::empty()),
         }
     }
 
@@ -36,6 +39,12 @@ impl Thread {
     #[must_use]
     pub fn table(&self) -> &mmu::Table {
         &self.table
+    }
+}
+
+impl Default for Thread {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -66,10 +75,16 @@ pub fn save(_thread: &mut Thread) {
 /// handler will be called and the thread will be paused. The trap handler
 /// will invoke some incantations and will return to the caller of this
 /// function.
-pub fn execute(thread: &mut Thread) {
+pub fn execute(thread: &mut Thread) -> Trap {
     // TODO: Restore FPU state
     unsafe {
         thread.table().set_current();
         thread_execute(&mut thread.context);
+    }
+
+    match riscv::register::scause::read().cause() {
+        scause::Trap::Exception(Exception::UserEnvCall) => Trap::Syscall,
+        scause::Trap::Exception(_) => Trap::Exception,
+        scause::Trap::Interrupt(_) => Trap::Interrupt,
     }
 }

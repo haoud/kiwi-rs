@@ -6,6 +6,7 @@ use futures::Future;
 
 pub mod executor;
 pub mod task;
+pub mod user;
 pub mod waker;
 
 /// A future that yields once before completing. This future can be useful
@@ -49,22 +50,6 @@ impl Future for YieldFuture {
             Poll::Pending
         }
     }
-}
-
-async fn test() {
-    log::info!("Hello from the test function");
-    yield_once().await;
-    log::info!("Hello again from the test function");
-}
-
-async fn test2() {
-    log::info!("Hello from the test2 function");
-}
-
-pub fn setup() {
-    executor::setup();
-    executor::spawn(test());
-    executor::spawn(test2());
 }
 
 /// Yields once before completing.

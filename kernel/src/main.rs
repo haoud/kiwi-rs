@@ -5,6 +5,7 @@ pub mod elf;
 pub mod future;
 pub mod heap;
 pub mod pmm;
+pub mod process;
 
 extern crate alloc;
 
@@ -28,7 +29,7 @@ static INIT: &[u8] = include_bytes!(
 pub fn kiwi(memory: arch::memory::UsableMemory) -> ! {
     pmm::setup(memory);
     heap::setup();
-    future::setup();
-
+    future::executor::setup();
+    future::executor::spawn(elf::load(INIT));
     future::executor::run();
 }

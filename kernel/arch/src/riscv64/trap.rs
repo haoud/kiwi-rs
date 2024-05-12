@@ -9,24 +9,6 @@ extern "C" {
     fn kernel_enter();
 }
 
-/// The interrupt that caused the kernel to be interrupted. This is a
-/// empty struct because the RISC-V architecture provide a `scause`
-/// register that contains all the information needed to determine
-/// the cause of the trap. On some architectures (e.g. x86), the
-/// trap is more complex and requires a dedicated struct to store
-/// all the information.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct InterruptNr {}
-
-/// The exception that caused the kernel to be interrupted. This is a
-/// empty struct because the RISC-V architecture provide a `scause`
-/// register that contains all the information needed to determine
-/// the cause of the trap. On some architectures (e.g. x86), the
-/// trap is more complex and requires a dedicated struct to store
-/// all the information.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ExceptionNr {}
-
 /// The context of the trap. This struct is used to store the state
 /// of the CPU when the trap occured.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -66,8 +48,9 @@ impl Context {
 }
 
 pub fn setup() {
-    // SAFETY: The function `kernel_enter` is defined in the assembly file
-    // `trap.asm` and is designed to handle all interrupts and exceptions.
+    // SAFETY: The function `kernel_enter` is defined in the
+    // assembly file `trap.asm` and is designed to handle all
+    // interrupts and exceptions.
     unsafe {
         riscv::register::stvec::write(kernel_enter as usize, TrapMode::Direct);
     }
