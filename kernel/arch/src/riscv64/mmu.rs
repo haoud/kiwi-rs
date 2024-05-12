@@ -483,6 +483,14 @@ impl Physical {
 /// This will allow the kernel to access the physical memory of the system
 /// without having to manually map each page.
 pub fn setup() {
+    log::info!("Initializing the MMU and remapping the kernel");
+    log::debug!("Using SV39 paging mode (3 levels of page tables)");
+    log::debug!(
+        "User address space :   0x0000000000000000 - 0x00007FFFFFFFFFFF"
+    );
+    log::debug!(
+        "Kernel address space : 0xFFFFFFFFC0000000 - 0xFFFFFFFFFFFFFFFF"
+    );
     let mut table = KERNEL_TABLE.lock();
 
     // Map the first 255 GiB of physical memory to the first 255 GiB

@@ -30,6 +30,13 @@ pub fn load(file: &[u8]) -> arch::thread::Thread {
         let mut misalign = segment_mem_start % arch::mmu::PAGE_SIZE;
         let segment_aligned_mem_start = segment_mem_start - misalign;
 
+        log::trace!(
+            "Loading elf segment 0x{:x} - 0x{:x} (misalign: 0x{:x})",
+            segment_mem_start,
+            segment_mem_end,
+            misalign
+        );
+
         // Map each page in the segment into the thread's page table. If the
         // start address of the segment is not page aligned, the first page
         // will be partially filled with data from the ELF file and the rest

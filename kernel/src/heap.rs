@@ -35,8 +35,17 @@ impl talc::OomHandler for OomHandler {
         // memory. Since kiwi is designed to be a microkernel, this
         // should never happen.
         if layout.size() > Self::ALLOCATION_SIZE {
+            log::error!(
+                "Allocation request too large: {} bytes",
+                layout.size()
+            );
             return Err(());
         }
+
+        log::debug!(
+            "Kernel heap exhausted, attempting to allocate {} more bytes",
+            Self::ALLOCATION_SIZE
+        );
 
         // Allocate 128KiB of contiguous physical memory
         let count = Self::ALLOCATION_SIZE >> arch::mmu::PAGE_SHIFT;
@@ -61,6 +70,7 @@ impl talc::OomHandler for OomHandler {
 /// Setup the global kernel heap allocator.
 #[inline]
 pub fn setup() {
+    log::info!("Setting up the kernel heap allocator");
     // The heap will be initialized by the global allocator when the
     // first allocation will be requested.
 }

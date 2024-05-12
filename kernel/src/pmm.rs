@@ -27,6 +27,9 @@ pub fn setup(mut memory: arch::memory::UsableMemory) {
     let frame_count = usize::from(memory.last_address()) / arch::mmu::PAGE_SIZE;
     let bitmap_size = frame_count * core::mem::size_of::<bool>();
 
+    log::info!("Initializing physical memory manager");
+    log::debug!("Bitmap size: {} bytes", bitmap_size);
+
     // Allocate the bitmap
     let bitmap = unsafe {
         let base = memory
@@ -59,6 +62,7 @@ pub fn setup(mut memory: arch::memory::UsableMemory) {
             });
         });
 
+    // Initialize the bitmap
     BITMAP.call_once(|| spin::Mutex::new(bitmap));
 }
 

@@ -18,9 +18,8 @@ pub fn setup(hart: usize, device_tree: *const u8) -> UsableMemory {
     #[cfg(feature = "logging")]
     generic::log::setup();
 
-    // Some debug informations
-    ::log::trace!("Booting on hart {hart}");
-    ::log::trace!("Device tree is at {:p}", device_tree);
+    ::log::info!("Booting the riscv64 kernel");
+    ::log::info!("Hello world ! Booting on hart {}", hart);
 
     // Parse the device tree using the `fdt` crate
     // SAFETY: We must assume that the device tree pointer is valid
@@ -30,20 +29,10 @@ pub fn setup(hart: usize, device_tree: *const u8) -> UsableMemory {
     };
 
     let memory = UsableMemory::new(&fdt);
-    ::log::trace!("Usable memory count: {} kio", memory.size() / 1024);
 
-    // Setup exception and IRQ handling
-    trap::setup();
-    ::log::info!("Trap handling initialized");
-
-    // Initialize the MMU
     mmu::setup();
-    ::log::info!("MMU initialized");
-
-    // Initialize the timer
+    trap::setup();
     timer::setup(&fdt);
-    ::log::info!("Timer initialized");
-    ::log::info!("Internal frequency: {} Hz", timer::internal_frequency());
 
     memory
 }
@@ -58,9 +47,11 @@ pub fn shutdown() -> ! {
 /// perform a shutdown instead.
 #[inline]
 pub fn reboot() -> ! {
+    ::log::info!("Rebooting the computer");
     _ = sbi::system_reset::system_reset(
         sbi::system_reset::ResetType::ColdReboot,
         sbi::system_reset::ResetReason::NoReason,
     );
+    ::log::warn!("Failed to reboot the computer, trying to shutdown instead");
     sbi::legacy::shutdown()
 }

@@ -8,6 +8,8 @@ static INTERNAL_TICK: SeqLock<u64> = SeqLock::new(0);
 /// device tree and calculate the internal tick value, which is the number of
 /// nanoseconds per tick.
 pub fn setup(device_tree: &fdt::Fdt) {
+    log::info!("Initializing timer");
+
     let cpu = device_tree
         .cpus()
         .next()
@@ -15,6 +17,9 @@ pub fn setup(device_tree: &fdt::Fdt) {
 
     let frequency = cpu.timebase_frequency() as u64;
     INTERNAL_TICK.write(1_000_000_000 / frequency);
+
+    log::debug!("Internal timer tick: {} ns", internal_tick());
+    log::debug!("Internal timer frequency: {} Hz", internal_frequency());
 
     // Enable timer interrupts.
     unsafe {

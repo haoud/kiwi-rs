@@ -35,7 +35,7 @@ impl core::fmt::Write for Logger {
 /// will be ignored until this function is called.
 #[cfg(feature = "logging")]
 pub fn setup() {
-    log::set_max_level(log::LevelFilter::Trace);
+    log::set_max_level(log::LevelFilter::Info);
     log::set_logger(&Logger {}).unwrap();
     log::trace!("Logger initialized");
 }

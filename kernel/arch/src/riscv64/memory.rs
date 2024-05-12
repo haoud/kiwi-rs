@@ -1,5 +1,4 @@
 use crate::{generic::memory::UsableMemory, memory::Region};
-use fdt::Fdt;
 use heapless::Vec;
 
 impl UsableMemory {
@@ -7,7 +6,7 @@ impl UsableMemory {
     /// as argument.
     #[inline]
     #[must_use]
-    pub fn new(device_tree: &Fdt) -> Self {
+    pub fn new(device_tree: &fdt::Fdt) -> Self {
         let mut regions = Vec::<Region, 32>::new();
 
         // Iterate over all the memory regions in the device tree and add
@@ -15,6 +14,12 @@ impl UsableMemory {
         for region in device_tree.memory().regions() {
             let mut start = region.starting_address as usize;
             let mut length = region.size.unwrap_or(0);
+
+            ::log::info!(
+                "Available memory region: {:#010x} - {:#010x}",
+                start,
+                start + length
+            );
 
             // The region 0x80000000 to 0x80200000 is reserved for the firmware
             // The region 0x80200000 to 0x80300000 is reserved for the kernel

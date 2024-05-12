@@ -6,6 +6,7 @@ use core::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
+/// A task that can be executed by an executor.
 pub struct Task<'a> {
     /// The executor that owns the task.
     executor: &'a Executor<'a>,

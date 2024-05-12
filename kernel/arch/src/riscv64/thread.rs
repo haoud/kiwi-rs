@@ -60,6 +60,13 @@ impl Default for Thread {
     }
 }
 
+impl Drop for Thread {
+    fn drop(&mut self) {
+        // FIXME: Free the page table
+        log::trace!("Dropping thread");
+    }
+}
+
 /// Create a new thread with the given instruction pointer and stack pointer.
 /// This will create a thread with a default context and an empty user page
 /// table (but still containing the kernel mappings).

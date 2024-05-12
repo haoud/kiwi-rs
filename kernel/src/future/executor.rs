@@ -74,6 +74,7 @@ impl Executor<'_> {
                 core::task::Poll::Ready(()) => {
                     // The task has completed. Therefore, we have nothing to
                     // do because the task was already removed from the map.
+                    log::trace!("Task {:?} completed", usize::from(id));
                 }
                 core::task::Poll::Pending => {
                     // The task is not yet completed. Therefore, we must
@@ -103,6 +104,7 @@ impl Default for Executor<'_> {
 
 /// Setup the global executor instance.
 pub fn setup() {
+    log::info!("Setting up the kernel executor");
     EXECUTOR.call_once(Executor::new);
 }
 
@@ -120,6 +122,7 @@ pub fn spawn(thread: arch::thread::Thread) {
         panic!("Duplicated task identifier");
     }
     executor.ready.push(id).expect("Ready queue full");
+    log::trace!("Task {:?} spawned", usize::from(id));
 }
 
 /// Run the executor forever. If there are no tasks ready to run, the

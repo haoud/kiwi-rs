@@ -56,6 +56,7 @@ impl Default for Context {
 }
 
 pub fn setup() {
+    log::info!("Initializing trap handling");
     // SAFETY: The function `kernel_enter` is defined in the
     // assembly file `trap.asm` and is designed to handle all
     // interrupts and exceptions.
