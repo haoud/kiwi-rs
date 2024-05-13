@@ -31,5 +31,11 @@ pub fn kiwi(memory: arch::memory::UsableMemory) -> ! {
     heap::setup();
     future::executor::setup();
     future::executor::spawn(elf::load(INIT));
+
+    let memory_usage = pmm::kernel_memory_pages() * 4;
+    log::info!("Boot completed !");
+    log::info!("Memory used by the kernel: {} Kib", memory_usage);
+
+    // Run the executor and start the first user-space process
     future::executor::run();
 }

@@ -6,10 +6,37 @@ use heapless::Vec;
 /// before giving the remaning memory to the pager process.
 #[derive(Debug, Clone)]
 pub struct UsableMemory {
+    /// The list of memory regions that can be used to allocate memory.
     pub regions: Vec<Region, 32>,
+
+    /// The amount of memory reserved for the firmware.
+    pub firmware_memory: usize,
+
+    /// The amount of memory reserved for the kernel.
+    pub kernel_memory: usize,
+
+    /// The total amount of memory available.
+    pub total_memory: usize,
 }
 
 impl UsableMemory {
+    /// Create a new usable memory structure with the given memory regions and
+    /// memory informations.
+    #[must_use]
+    fn setup(
+        regions: Vec<Region, 32>,
+        firmware_memory: usize,
+        kernel_memory: usize,
+        total_memory: usize,
+    ) -> Self {
+        Self {
+            regions,
+            firmware_memory,
+            kernel_memory,
+            total_memory,
+        }
+    }
+
     /// Allocate an object using the available memory regions. It will update
     /// the region list to reflect the allocation and will return a physical
     /// address that can be used to store the object.
@@ -50,6 +77,8 @@ impl UsableMemory {
                 let start = region.start + align;
                 region.start += length + align;
                 region.length -= length + align;
+
+                self.kernel_memory += length + align;
                 Region { start, length }
             })?;
 

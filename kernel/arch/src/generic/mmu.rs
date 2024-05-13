@@ -168,6 +168,68 @@ impl Sub<usize> for Virtual {
     }
 }
 
+pub trait Align {
+    /// Assume that the value is a address and return the address aligned to the
+    /// nearest previous page. If the address is already aligned to the page size,
+    /// the address will not be changed.
+    #[must_use]
+    fn page_align_down(&self) -> Self;
+
+    /// Assume that the value is a size in bytes and return the number of pages
+    /// that it represents. If the value is not a multiple of the page size, the
+    /// result will be rounded up to the nearest page.
+    #[must_use]
+    fn page_count_down(&self) -> Self;
+
+    /// Assume that the value is a address and return the address aligned to the
+    /// nearest next page. If the address is already aligned to the page size,
+    /// the address will not be changed.
+    #[must_use]
+    fn page_align_up(&self) -> Self;
+
+    /// Assume that the value is a size in bytes and return the number of pages
+    /// that it represents. If the value is not a multiple of the page size, the
+    /// result will be rounded up to the nearest page.
+    #[must_use]
+    fn page_count_up(&self) -> Self;
+}
+
+impl Align for usize {
+    fn page_count_down(&self) -> Self {
+        self / PAGE_SIZE
+    }
+
+    fn page_count_up(&self) -> Self {
+        (self + PAGE_SIZE - 1) / PAGE_SIZE
+    }
+
+    fn page_align_down(&self) -> Self {
+        self & !(PAGE_SIZE - 1)
+    }
+
+    fn page_align_up(&self) -> Self {
+        (self + PAGE_SIZE - 1) & !(PAGE_SIZE - 1)
+    }
+}
+
+impl Align for u64 {
+    fn page_count_down(&self) -> Self {
+        self / PAGE_SIZE as u64
+    }
+
+    fn page_count_up(&self) -> Self {
+        (self + PAGE_SIZE as u64 - 1) / PAGE_SIZE as u64
+    }
+
+    fn page_align_down(&self) -> Self {
+        self & !(PAGE_SIZE as u64 - 1)
+    }
+
+    fn page_align_up(&self) -> Self {
+        (self + PAGE_SIZE as u64 - 1) & !(PAGE_SIZE as u64 - 1)
+    }
+}
+
 bitflags! {
     /// A set of rights that can be granted to a memory region. These rights
     /// are used to control the access to the memory region, and are enforced

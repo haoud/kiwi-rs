@@ -1,4 +1,7 @@
+use arch::mmu::Align;
 use bitflags::bitflags;
+use core::ops::{AddAssign, SubAssign};
+use seqlock::SeqLock;
 
 bitflags! {
     /// Allocation flags that can be used to customize the behavior of
@@ -16,16 +19,32 @@ bitflags! {
     }
 }
 
+/// The number of reserved memory pages. These pages are not available for
+/// allocation. Some of these pages are strictly reserved by the hardware
+/// and cannot be used by the kernel (for example, the firemware data) while
+/// others can be used by the kernel for specific purposes (for example, the
+/// framebuffer or the memory mapped I/O regions).
+static RESERVED_MEMORY_PAGES: spin::Mutex<usize> = spin::Mutex::new(0);
+
+/// The number of kernel memory pages. These pages are used by the kernel for
+/// its own data structures and are not available for allocation. This includes
+/// static code and data, the kernel heap, the kernel stack, etc.
+static KERNEL_MEMORY_PAGES: spin::Mutex<usize> = spin::Mutex::new(0);
+
+/// The number of total memory pages. This is the total number of pages that
+/// are available for allocation.
+static TOTAL_MEMORY_PAGES: SeqLock<usize> = SeqLock::new(0);
+
 /// The bitmap allocator is used to allocate and deallocate physical frames
 /// using a bitmap. This allocator is very slow, but does not consume a lot
 /// of memory (and is can be improved by using bit instead of bool).
-static BITMAP: spin::Once<spin::Mutex<&mut [bool]>> = spin::Once::new();
+static BITMAP: spin::Once<spin::Mutex<&mut [(bool, bool)]>> = spin::Once::new();
 
 /// Initialize the physical memory manager
 #[inline]
 pub fn setup(mut memory: arch::memory::UsableMemory) {
     let frame_count = usize::from(memory.last_address()) / arch::mmu::PAGE_SIZE;
-    let bitmap_size = frame_count * core::mem::size_of::<bool>();
+    let bitmap_size = frame_count * core::mem::size_of::<(bool, bool)>();
 
     log::info!("Initializing physical memory manager");
     log::debug!("Bitmap size: {} bytes", bitmap_size);
@@ -33,15 +52,19 @@ pub fn setup(mut memory: arch::memory::UsableMemory) {
     // Allocate the bitmap
     let bitmap = unsafe {
         let base = memory
-            .allocate_memory::<bool>(bitmap_size, 16)
+            .allocate_memory::<(bool, bool)>(bitmap_size, 16)
             .expect("Failed to allocate bitmap");
 
         let ptr = arch::mmu::translate_physical(base)
             .expect("Failed to translate bitmap physical address")
-            .as_mut_ptr::<bool>();
+            .as_mut_ptr::<(bool, bool)>();
 
         core::slice::from_raw_parts_mut(ptr, frame_count)
     };
+
+    *RESERVED_MEMORY_PAGES.lock() = memory.firmware_memory.page_count_up();
+    *KERNEL_MEMORY_PAGES.lock() = memory.kernel_memory.page_count_up();
+    TOTAL_MEMORY_PAGES.write(memory.total_memory.page_count_up());
 
     // Set all free frames to true
     memory
@@ -58,7 +81,7 @@ pub fn setup(mut memory: arch::memory::UsableMemory) {
                 .frame_idx();
 
             (start..end).for_each(|frame| {
-                bitmap[frame] = true;
+                bitmap[frame] = (true, false);
             });
         });
 
@@ -82,6 +105,7 @@ pub fn allocate_range(
     count: usize,
     flags: AllocationFlags,
 ) -> Option<arch::mmu::Physical> {
+    let kernel = flags.contains(AllocationFlags::KERNEL);
     let mut bitmap = BITMAP
         .get()
         .expect("Physical memory bitmap not initialized")
@@ -90,11 +114,11 @@ pub fn allocate_range(
     // Find the first range of contiguous free frames
     let start = bitmap
         .windows(count)
-        .position(|frames| frames.iter().all(|&b| b))?;
+        .position(|frames| frames.iter().all(|&(free, _)| free))?;
 
     // Mark the frames as used
     (start..start + count).for_each(|frame| {
-        bitmap[frame] = false;
+        bitmap[frame] = (false, kernel);
     });
 
     // Zero the frames if requested
@@ -107,6 +131,10 @@ pub fn allocate_range(
         }
     }
 
+    // Update the number of kernel memory pages
+    if kernel {
+        KERNEL_MEMORY_PAGES.lock().add_assign(count);
+    }
     Some(index2phys(start))
 }
 
@@ -142,10 +170,36 @@ pub fn deallocate_range(base: arch::mmu::Physical, count: usize) {
     assert!(start + count >= start);
     assert!(start + count <= bitmap.len());
 
+    let mut kernel = 0;
     (start..end).for_each(|frame| {
-        assert!(!bitmap[frame], "Frame already deallocated");
-        bitmap[frame] = true;
+        assert!(!bitmap[frame].0, "Frame already deallocated");
+        kernel += usize::from(bitmap[frame].1);
+        bitmap[frame] = (true, false);
     });
+
+    if kernel > 0 {
+        KERNEL_MEMORY_PAGES.lock().sub_assign(kernel);
+    }
+}
+
+/// Return the total number of memory pages in the system
+#[must_use]
+pub fn total_memory_pages() -> usize {
+    TOTAL_MEMORY_PAGES.read()
+}
+
+/// Return the number of memory pages that are reserved by the hardware
+/// or by the firmware and are not available for allocation.
+#[must_use]
+pub fn reserved_memory_pages() -> usize {
+    *RESERVED_MEMORY_PAGES.lock()
+}
+
+/// Return the number of memory pages that are used by the kernel and are
+/// not available for allocation.
+#[must_use]
+pub fn kernel_memory_pages() -> usize {
+    *KERNEL_MEMORY_PAGES.lock()
 }
 
 /// Convert a frame index to a physical address

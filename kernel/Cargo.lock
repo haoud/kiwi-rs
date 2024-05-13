@@ -201,6 +201,7 @@ dependencies = [
  "intrusive-collections",
  "log",
  "macros",
+ "seqlock",
  "spin",
  "talc",
 ]

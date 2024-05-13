@@ -10,7 +10,6 @@ RAM_START = 0x80000000;
 SECTIONS
 {
     . = KERNEL_PHYSICAL_CODE_BASE;
-
     .early :
     {
         __early_start = .;
@@ -23,12 +22,16 @@ SECTIONS
     OFFSET = __early_end - __early_start;
     . = KERNEL_VIRTUAL_CODE_BASE + OFFSET;
 
+    __reclaimable_start = KERNEL_VIRTUAL_CODE_BASE;
+    __start = .;
+
     .init ALIGN(4K) : AT(ADDR(.init) - KERNEL_VIRTUAL_BASE + RAM_START)
     {
         __init_start = .;
         *(.init .init.*)
         __init_end = .;
     }
+    __reclaimable_end = .;
 
     .text ALIGN(4K) : AT(ADDR(.text) - KERNEL_VIRTUAL_BASE + RAM_START)
     {
@@ -54,6 +57,8 @@ SECTIONS
         *(.sbss .sbss.*)
         __bss_end = .;
     }
+
+    __end = .;
 
     /DISCARD/ : 
     {
