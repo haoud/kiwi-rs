@@ -1,5 +1,5 @@
-use super::task::{self, Task};
-use super::user::thread_loop;
+use crate::future::task::{self, Task};
+use crate::{arch, future::user::thread_loop};
 use alloc::boxed::Box;
 use alloc::collections::BTreeMap;
 use crossbeam::queue::ArrayQueue;

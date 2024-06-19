@@ -1,4 +1,4 @@
-use crate::{generic, memory::UsableMemory};
+use crate::arch::{generic, memory::UsableMemory};
 use macros::init;
 
 pub mod cpu;

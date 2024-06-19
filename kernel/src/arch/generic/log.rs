@@ -45,5 +45,5 @@ pub fn setup() {
 /// On most platforms, this function will write to the serial port or
 /// the console.
 pub fn write(message: &str) {
-    crate::target::log::write(message);
+    crate::arch::target::log::write(message);
 }

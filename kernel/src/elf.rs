@@ -1,4 +1,4 @@
-use crate::pmm;
+use crate::{arch, pmm};
 
 /// Load an ELF file into memory and return a thread that can be executed.
 ///

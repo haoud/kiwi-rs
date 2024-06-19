@@ -1,5 +1,5 @@
 use super::timer;
-use crate::{thread::Thread, trap::Resume};
+use crate::arch::{thread::Thread, trap::Resume};
 use riscv::register::{
     scause::{Exception, Interrupt, Trap},
     stvec::TrapMode,

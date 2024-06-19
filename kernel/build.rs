@@ -3,7 +3,7 @@ fn main() {
 
     std::fs::write(
         out_dir.join("link.ld"),
-        include_bytes!("src/riscv64/config/link.ld"),
+        include_bytes!("src/arch/riscv64/config/link.ld"),
     )
     .unwrap();
     println!("cargo:rustc-link-search={}", out_dir.display());

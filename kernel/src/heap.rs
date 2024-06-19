@@ -1,4 +1,4 @@
-use crate::pmm;
+use crate::{arch, pmm};
 
 /// The global heap allocator. This allocator is used to allocate
 /// memory on the kernel heap. However, the kernel heap should only

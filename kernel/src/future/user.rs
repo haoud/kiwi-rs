@@ -1,5 +1,6 @@
 use super::yield_once;
-use arch::trap::{Resume, Trap};
+use crate::arch;
+use crate::arch::trap::{Resume, Trap};
 use config::THREAD_QUANTUM;
 use core::time::Duration;
 

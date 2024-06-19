@@ -1,5 +1,5 @@
 use super::{mmu, trap};
-use crate::trap::Trap;
+use crate::arch::trap::Trap;
 use alloc::boxed::Box;
 use riscv::register::scause::{self, Exception};
 

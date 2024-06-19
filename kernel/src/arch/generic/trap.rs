@@ -91,10 +91,10 @@ pub enum Syscall {
     Nop = 0,
 }
 
-pub fn handle_exception(thread: &mut crate::thread::Thread) -> Resume {
-    crate::target::trap::handle_exception(thread)
+pub fn handle_exception(thread: &mut crate::arch::thread::Thread) -> Resume {
+    crate::arch::target::trap::handle_exception(thread)
 }
 
-pub fn handle_interrupt(thread: &mut crate::thread::Thread) -> Resume {
-    crate::target::trap::handle_interrupt(thread)
+pub fn handle_interrupt(thread: &mut crate::arch::thread::Thread) -> Resume {
+    crate::arch::target::trap::handle_interrupt(thread)
 }

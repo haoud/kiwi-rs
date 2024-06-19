@@ -1,5 +1,5 @@
 use super::mmu;
-use crate::{generic::memory::UsableMemory, memory::Region};
+use crate::arch::{generic::memory::UsableMemory, memory::Region};
 use heapless::Vec;
 
 extern "C" {

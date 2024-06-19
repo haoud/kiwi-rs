@@ -1,4 +1,4 @@
-use crate::mmu::{self, Physical};
+use crate::arch::mmu::{self, Physical};
 use heapless::Vec;
 
 /// A structure representing the usable memory regions of the system. It is
@@ -95,7 +95,8 @@ impl UsableMemory {
         let page = self.allocate_page()?;
         unsafe {
             core::ptr::write_bytes(
-                crate::mmu::translate_physical(page).unwrap().0 as *mut u8,
+                crate::arch::mmu::translate_physical(page).unwrap().0
+                    as *mut u8,
                 0,
                 4096,
             );

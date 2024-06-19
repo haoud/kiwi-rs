@@ -1,4 +1,4 @@
-use arch::mmu::Align;
+use crate::arch::{self, mmu::Align};
 use bitflags::bitflags;
 use core::ops::{AddAssign, SubAssign};
 use seqlock::SeqLock;

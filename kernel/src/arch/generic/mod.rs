@@ -9,10 +9,10 @@ pub mod trap;
 
 /// Shutdown the system.
 pub fn shutdown() -> ! {
-    crate::target::shutdown();
+    crate::arch::target::shutdown();
 }
 
 /// Reboot the system.
 pub fn reboot() -> ! {
-    crate::target::reboot();
+    crate::arch::target::reboot();
 }

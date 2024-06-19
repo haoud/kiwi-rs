@@ -13,7 +13,9 @@
 //!     - Move the `arch` crate to the `kernel` crate
 #![no_std]
 #![no_main]
+#![feature(panic_info_message)]
 
+pub mod arch;
 pub mod elf;
 pub mod future;
 pub mod heap;

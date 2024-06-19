@@ -3,22 +3,6 @@
 version = 3
 
 [[package]]
-name = "arch"
-version = "0.1.0"
-dependencies = [
- "bitflags",
- "config",
- "fdt",
- "heapless",
- "log",
- "macros",
- "riscv",
- "sbi",
- "seqlock",
- "spin",
-]
-
-[[package]]
 name = "autocfg"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -192,15 +176,18 @@ dependencies = [
 name = "kernel"
 version = "0.1.0"
 dependencies = [
- "arch",
  "bitflags",
  "config",
  "crossbeam",
  "elf",
+ "fdt",
  "futures",
+ "heapless",
  "intrusive-collections",
  "log",
  "macros",
+ "riscv",
+ "sbi",
  "seqlock",
  "spin",
  "talc",

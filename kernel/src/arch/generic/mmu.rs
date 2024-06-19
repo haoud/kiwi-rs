@@ -1,5 +1,5 @@
-use crate::target::mmu::Table;
-pub use crate::target::mmu::{PAGE_SHIFT, PAGE_SIZE};
+use crate::arch::target::mmu::Table;
+pub use crate::arch::target::mmu::{PAGE_SHIFT, PAGE_SIZE};
 use bitflags::bitflags;
 use core::ops::{Add, Sub};
 
@@ -320,14 +320,14 @@ pub fn map(
     rights: Rights,
     flags: Flags,
 ) -> Result<(), MapError> {
-    crate::target::mmu::map(table, virt, phys, rights, flags)
+    crate::arch::target::mmu::map(table, virt, phys, rights, flags)
 }
 
 /// Unmap a virtual address, returning the physical address that was previously
 /// mapped to it. If the virtual address was not mapped to any physical address,
 /// this function will return an error.
 pub fn unmap(table: &mut Table, virt: Virtual) -> Result<Physical, UnmapError> {
-    crate::target::mmu::unmap(table, virt)
+    crate::arch::target::mmu::unmap(table, virt)
 }
 
 /// Translate a physical address to a virtual address. If the translation
@@ -337,5 +337,5 @@ pub fn unmap(table: &mut Table, virt: Virtual) -> Result<Physical, UnmapError> {
 /// with more than 4 GiB of RAM, which is not common.
 #[must_use]
 pub fn translate_physical(phys: Physical) -> Option<Virtual> {
-    crate::target::mmu::translate_physical(phys)
+    crate::arch::target::mmu::translate_physical(phys)
 }

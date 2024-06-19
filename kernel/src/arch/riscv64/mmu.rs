@@ -2,7 +2,9 @@
 //! implementation only handle SV39 paging, which should be supported by all
 //! RISC-V64 systems and should be enough for most use cases. However, it is
 //! possible to add support for other paging modes in the future.
-use crate::mmu::{Flags, MapError, Physical, Rights, UnmapError, Virtual};
+use crate::arch::mmu::{
+    Flags, MapError, Physical, Rights, UnmapError, Virtual,
+};
 use bitflags::bitflags;
 use core::ops::{Index, IndexMut};
 

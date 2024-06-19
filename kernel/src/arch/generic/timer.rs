@@ -3,19 +3,19 @@
 /// new timer. If the timer was disabled by the `shutdown` function, it will be
 /// automatically enabled.
 pub fn next_event(next: core::time::Duration) {
-    crate::target::timer::next_event(next);
+    crate::arch::target::timer::next_event(next);
 }
 
 /// Shutdown the timer, preventing any further interrupts from being raised.
 pub fn shutdown() {
-    crate::target::timer::shutdown();
+    crate::arch::target::timer::shutdown();
 }
 
 /// The internal frequency of the timer, in Hertz. This is the frequency of the
 /// timer's timebase, and is the frequency at which the timer increments.
 #[must_use]
 pub fn internal_frequency() -> u64 {
-    crate::target::timer::internal_frequency()
+    crate::arch::target::timer::internal_frequency()
 }
 
 /// The duration of a single internal tick, in nanoseconds. This will be
@@ -23,5 +23,5 @@ pub fn internal_frequency() -> u64 {
 /// be measured by the timer.
 #[must_use]
 pub fn internal_tick() -> u64 {
-    crate::target::timer::internal_tick()
+    crate::arch::target::timer::internal_tick()
 }
