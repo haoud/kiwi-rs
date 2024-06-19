@@ -1,3 +1,16 @@
+//! TODO:
+//!     - Clippy lints
+//!     - Monolithic kernel
+//!         * Paging code can directly allocate memory
+//!         * Reserve some memory for the kernel to avoid panicking
+//!     - Executor than can mix user and kernel task
+//!     - Proper async suspend: If this is an user task that is suspended,
+//!     save it quantum and restore it when resumed
+//!     - Reduce memory usage for the physical memory management
+//!     - Request memory used during the boot process
+//!     - Use structure instead of (too) many arguments for some functions
+//!     - Create an addr crate to handle addresses
+//!     - Move the `arch` crate to the `kernel` crate
 #![no_std]
 #![no_main]
 

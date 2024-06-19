@@ -1,10 +1,10 @@
+.equ KERNEL_VIRTUAL_BASE, 0xFFFFFFFFC0000000
+.equ KERNEL_PHYSICAL_BASE, 0x80000000
+
 .macro LA_FAR, reg, sym
 	lui \reg, %hi(\sym)
 	addi \reg, \reg, %lo(\sym)
 .endm
-
-.equ KERNEL_VIRTUAL_BASE, 0xFFFFFFFFC0000000
-.equ KERNEL_PHYSICAL_BASE, 0x80000000
 
 .section .early, "ax"
 .globl _start

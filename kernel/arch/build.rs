@@ -1,9 +1,7 @@
-use std::{env, fs, path::PathBuf};
-
 fn main() {
-    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let out_dir = std::path::PathBuf::from(std::env::var("OUT_DIR").unwrap());
 
-    fs::write(
+    std::fs::write(
         out_dir.join("link.ld"),
         include_bytes!("src/riscv64/config/link.ld"),
     )

@@ -616,8 +616,8 @@ pub fn unmap(root: &mut Table, virt: Virtual) -> Result<Physical, UnmapError> {
         entry = &mut table[vpn[i]];
     }
 
-    // Get the physical address that was previously mapped to the given virtual address,
-    // unmap it, flush the TLB and return the physical address.
+    // Get the physical address that was previously mapped to the given virtual
+    // address, unmap it, flush the TLB and return the physical address.
     let address = entry.address();
     entry.clear();
     // TODO: Flush the TLB
