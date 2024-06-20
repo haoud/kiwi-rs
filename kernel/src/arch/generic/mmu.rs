@@ -169,27 +169,27 @@ impl Sub<usize> for Virtual {
 }
 
 pub trait Align {
-    /// Assume that the value is a address and return the address aligned to the
-    /// nearest previous page. If the address is already aligned to the page size,
-    /// the address will not be changed.
+    /// Assume that the value is a address and return the address aligned to
+    /// the nearest previous page. If the address is already aligned to the
+    /// page size, the address will not be changed.
     #[must_use]
     fn page_align_down(&self) -> Self;
 
-    /// Assume that the value is a size in bytes and return the number of pages
-    /// that it represents. If the value is not a multiple of the page size, the
-    /// result will be rounded up to the nearest page.
+    /// Assume that the value is a size in bytes and return the number of
+    /// pages that it represents. If the value is not a multiple of the page
+    /// size, the result will be rounded up to the nearest page.
     #[must_use]
     fn page_count_down(&self) -> Self;
 
-    /// Assume that the value is a address and return the address aligned to the
-    /// nearest next page. If the address is already aligned to the page size,
-    /// the address will not be changed.
+    /// Assume that the value is a address and return the address aligned to
+    /// the nearest next page. If the address is already aligned to the page
+    /// size, the address will not be changed.
     #[must_use]
     fn page_align_up(&self) -> Self;
 
     /// Assume that the value is a size in bytes and return the number of pages
-    /// that it represents. If the value is not a multiple of the page size, the
-    /// result will be rounded up to the nearest page.
+    /// that it represents. If the value is not a multiple of the page size,
+    /// the result will be rounded up to the nearest page.
     #[must_use]
     fn page_count_up(&self) -> Self;
 }
@@ -290,16 +290,10 @@ pub enum MapError {
     /// before trying to map it again.
     AlreadyMapped,
 
-    /// The given frame could not be mapped because it would require an
-    /// intermediate table to be created, and the given frame cannot be
-    /// consumed to create it. This is an variant of `FrameConsumed` that
-    /// is mostly returned when the frame size is greater than table size.
-    NeedIntermediateTable,
-
-    /// The given frame was consumed to create an intermediate table. The
-    /// caller should retry the operation with another frame to continue
-    /// the mapping.
-    FrameConsumed,
+    /// The kernel ran out of memory while trying to map the frame. This
+    /// can happen if the kernel needs to allocate an intermediate page table
+    /// to map the frame, but there is no memory available to do so.
+    OutOfMemory,
 }
 
 /// An error that can happen when trying to unmap a virtual address.

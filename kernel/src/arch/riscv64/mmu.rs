@@ -2,8 +2,9 @@
 //! implementation only handle SV39 paging, which should be supported by all
 //! RISC-V64 systems and should be enough for most use cases. However, it is
 //! possible to add support for other paging modes in the future.
-use crate::arch::mmu::{
-    Flags, MapError, Physical, Rights, UnmapError, Virtual,
+use crate::{
+    arch::mmu::{Flags, MapError, Physical, Rights, UnmapError, Virtual},
+    pmm::{self, AllocationFlags},
 };
 use bitflags::bitflags;
 use core::ops::{Index, IndexMut};
@@ -558,18 +559,18 @@ pub fn map(
     for i in (target_level..2).rev() {
         if !entry.present() {
             if align == Virtual::PAGE_SIZE {
-                // Use the frame that was given to us to create the next table.
-                // FIXME: However, I'm not sure if it is a good idea to consume
-                // the frame like this. What if the frame passed to us is not
-                // regular memory, but a framebuffer or a MMIO device ? We
-                // should probably return an error in this case.
-                // FIXME: Zero the frame
+                // Allocate a new zeroed frame with the kernel flag set and
+                // create a new leaf entry.
+                let flags = AllocationFlags::KERNEL | AllocationFlags::ZEROED;
+                let frame =
+                    pmm::allocate_frame(flags).ok_or(MapError::OutOfMemory)?;
+
                 entry.clear();
-                entry.set_address(phys);
+                entry.set_address(frame);
                 entry.set_present(true);
-                return Err(MapError::FrameConsumed);
             } else {
-                return Err(MapError::NeedIntermediateTable);
+                // TODO: Allocate a new frame and create a new table.
+                todo!();
             }
         }
 

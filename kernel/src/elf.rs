@@ -53,29 +53,18 @@ pub fn load(file: &[u8]) -> arch::thread::Thread {
             );
             let addr = arch::mmu::Virtual::new(page);
 
-            let mut frame = pmm::allocate_frame(pmm::AllocationFlags::ZEROED)
+            let frame = pmm::allocate_frame(pmm::AllocationFlags::ZEROED)
                 .expect("Failed to allocate zeroed page");
 
             // Map the page into the thread's page table
-            loop {
-                match arch::mmu::map(
-                    thread.table_mut(),
-                    addr,
-                    frame,
-                    arch::mmu::Rights::RWX | arch::mmu::Rights::USER,
-                    arch::mmu::Flags::empty(),
-                ) {
-                    Err(arch::mmu::MapError::FrameConsumed) => {
-                        frame =
-                            pmm::allocate_frame(pmm::AllocationFlags::ZEROED)
-                                .expect("Failed to allocate zeroed page");
-                    }
-                    Err(e) => {
-                        panic!("Failed to map page: {:?}", e);
-                    }
-                    Ok(()) => break,
-                }
-            }
+            arch::mmu::map(
+                thread.table_mut(),
+                addr,
+                frame,
+                arch::mmu::Rights::RWX | arch::mmu::Rights::USER,
+                arch::mmu::Flags::empty(),
+            )
+            .expect("Failed to map page");
 
             // Compute the size of the data to copy into the physical
             // page and compute the source and destination pointers
