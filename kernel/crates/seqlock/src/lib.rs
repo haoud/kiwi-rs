@@ -31,21 +31,21 @@ use core::{
 };
 
 /// A sequential lock
-pub struct SeqLock<T> {
+pub struct Seqlock<T> {
     data: UnsafeCell<T>,
     spin: spin::Mutex<()>,
     seq: AtomicUsize,
 }
 
 /// SAFETY: `SeqLock` is safe to send between threads if the data is `Send`.
-unsafe impl<T: Send> Send for SeqLock<T> {}
+unsafe impl<T: Send> Send for Seqlock<T> {}
 
 /// SAFETY: `SeqLock` is safe to share between threads if the data
 /// is `Send`, because the data is protected by a sequential lock
 /// that guarantees  consistent reads and writes.
-unsafe impl<T: Send> Sync for SeqLock<T> {}
+unsafe impl<T: Send> Sync for Seqlock<T> {}
 
-impl<T: Copy> SeqLock<T> {
+impl<T: Copy> Seqlock<T> {
     /// Create a new `SeqLock` with the given data
     #[must_use]
     pub const fn new(data: T) -> Self {
@@ -56,7 +56,7 @@ impl<T: Copy> SeqLock<T> {
         }
     }
 
-    /// Write data to the `SeqLock`. This will acquire a lock to ensure
+    /// Write data to the `Seqlock`. This will acquire a lock to ensure
     /// that the write is not interleaved with other writes, and will use
     /// the sequence number to ensure that reads wait for the write to
     /// complete.
@@ -144,15 +144,15 @@ impl<T: Copy> SeqLock<T> {
     }
 }
 
-impl<T: Copy + Default> Default for SeqLock<T> {
+impl<T: Copy + Default> Default for Seqlock<T> {
     fn default() -> Self {
         Self::new(Default::default())
     }
 }
 
-impl<T: Copy + core::fmt::Debug> core::fmt::Debug for SeqLock<T> {
+impl<T: Copy + core::fmt::Debug> core::fmt::Debug for Seqlock<T> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("SeqLock")
+        f.debug_struct("Seqlock")
             .field("data", &self.read())
             .field("spin", &self.spin)
             .field("seq", &self.seq)

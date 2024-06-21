@@ -1,7 +1,7 @@
 use crate::arch::{self, mmu::Align};
 use bitflags::bitflags;
 use core::ops::{AddAssign, SubAssign};
-use seqlock::SeqLock;
+use seqlock::Seqlock;
 
 bitflags! {
     /// Allocation flags that can be used to customize the behavior of
@@ -33,7 +33,7 @@ static KERNEL_MEMORY_PAGES: spin::Mutex<usize> = spin::Mutex::new(0);
 
 /// The number of total memory pages. This is the total number of pages that
 /// are available for allocation.
-static TOTAL_MEMORY_PAGES: SeqLock<usize> = SeqLock::new(0);
+static TOTAL_MEMORY_PAGES: Seqlock<usize> = Seqlock::new(0);
 
 /// The bitmap allocator is used to allocate and deallocate physical frames
 /// using a bitmap. This allocator is very slow, but does not consume a lot

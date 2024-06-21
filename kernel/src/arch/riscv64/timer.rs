@@ -1,8 +1,8 @@
-use seqlock::SeqLock;
+use seqlock::Seqlock;
 
 /// The internal timer frequency, in Hertz. This is the rate at which the timer
 /// counter is incremented/decremented.
-static INTERNAL_TICK: SeqLock<u64> = SeqLock::new(0);
+static INTERNAL_TICK: Seqlock<u64> = Seqlock::new(0);
 
 /// Setup the timer subsystem. It will extract the timebase frequency from the
 /// device tree and calculate the internal tick value, which is the number of

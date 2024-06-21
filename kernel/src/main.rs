@@ -2,13 +2,11 @@
 //!     - Clippy lints
 //!     - Monolithic kernel
 //!         * Reserve some memory for the kernel to avoid panicking
-//!     - SeqLock:
-//!         * Rename it to Seqlock
-//!         * Add some function to increment/decrement the lock
 //!     - Executor than can mix user and kernel task
 //!     - Proper async suspend: If this is an user task that is suspended,
 //!     save it quantum and restore it when resumed
 //!     - Reduce memory usage for the physical memory management
+//!         * Use a bitfield to track the memory usage
 //!     - Request memory used during the boot process
 //!     - Create an addr crate to handle addresses
 #![no_std]
