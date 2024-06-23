@@ -1,4 +1,8 @@
-use crate::arch::{self, mmu::Align};
+use crate::arch::{
+    self,
+    mmu::{self, Align},
+    target::addr::Physical,
+};
 use bitflags::bitflags;
 use core::ops::{AddAssign, SubAssign};
 use seqlock::Seqlock;
@@ -71,12 +75,10 @@ pub fn setup(mut memory: arch::memory::UsableMemory) {
         .into_free_regions()
         .into_iter()
         .for_each(|memory_region| {
-            let end = arch::mmu::Physical::new(
-                memory_region.start + memory_region.length,
-            )
-            .page_align_up()
-            .frame_idx();
-            let start = arch::mmu::Physical::new(memory_region.start)
+            let end = Physical::new(memory_region.start + memory_region.length)
+                .page_align_up()
+                .frame_idx();
+            let start = Physical::new(memory_region.start)
                 .page_align_up()
                 .frame_idx();
 
@@ -92,7 +94,7 @@ pub fn setup(mut memory: arch::memory::UsableMemory) {
 /// Allocate a frame. Returns `None` if no frame is available, or a frame if a
 /// frame was successfully allocated.
 #[must_use]
-pub fn allocate_frame(flags: AllocationFlags) -> Option<arch::mmu::Physical> {
+pub fn allocate_frame(flags: AllocationFlags) -> Option<Physical> {
     allocate_range(1, flags)
 }
 
@@ -104,7 +106,7 @@ pub fn allocate_frame(flags: AllocationFlags) -> Option<arch::mmu::Physical> {
 pub fn allocate_range(
     count: usize,
     flags: AllocationFlags,
-) -> Option<arch::mmu::Physical> {
+) -> Option<Physical> {
     let kernel = flags.contains(AllocationFlags::KERNEL);
     let mut bitmap = BITMAP
         .get()
@@ -145,7 +147,7 @@ pub fn allocate_range(
 /// - The frame is not page-aligned
 /// - The frame is not allocated (double free ?)
 /// - The frame is outside of the bitmap (kernel bug ?)
-pub fn deallocate_frame(frame: arch::mmu::Physical) {
+pub fn deallocate_frame(frame: Physical) {
     deallocate_range(frame, 1);
 }
 
@@ -157,7 +159,7 @@ pub fn deallocate_frame(frame: arch::mmu::Physical) {
 /// - The range is not allocated (double free ?)
 /// - The range is outside of the bitmap (kernel bug ?)
 /// - The range wraps around the end of the bitmap (kernel bug ?)
-pub fn deallocate_range(base: arch::mmu::Physical, count: usize) {
+pub fn deallocate_range(base: Physical, count: usize) {
     let start = base.frame_idx();
     let end = start + count;
 
@@ -203,7 +205,11 @@ pub fn kernel_memory_pages() -> usize {
 }
 
 /// Convert a frame index to a physical address
+///
+/// # Panics
+/// Panics if the resulting physical address would be invalid (greater than
+/// [`Physical::MAX`])
 #[must_use]
-const fn index2phys(index: usize) -> arch::mmu::Physical {
-    arch::mmu::Physical::new(index * arch::mmu::PAGE_SIZE)
+const fn index2phys(index: usize) -> Physical {
+    Physical::new(index * mmu::PAGE_SIZE)
 }

@@ -3,9 +3,9 @@
 extern crate alloc;
 
 #[cfg(target_arch = "riscv64")]
-mod riscv64;
+pub mod riscv64;
 #[cfg(target_arch = "riscv64")]
-use riscv64 as target;
+pub use riscv64 as target;
 
 pub mod generic;
 pub use generic::*;

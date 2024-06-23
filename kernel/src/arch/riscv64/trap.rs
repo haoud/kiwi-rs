@@ -111,5 +111,5 @@ pub fn handle_interrupt(_thread: &mut Thread) -> Resume {
 
 #[no_mangle]
 pub extern "C" fn kernel_trap_handler() {
-    panic!("Kernel trap handler");
+    unimplemented!("Kernel trap handler");
 }

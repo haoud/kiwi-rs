@@ -1,6 +1,7 @@
 use crate::arch::{generic, memory::UsableMemory};
 use macros::init;
 
+pub mod addr;
 pub mod cpu;
 pub mod irq;
 pub mod log;

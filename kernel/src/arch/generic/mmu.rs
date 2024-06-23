@@ -1,172 +1,9 @@
-use crate::arch::target::mmu::Table;
 pub use crate::arch::target::mmu::{PAGE_SHIFT, PAGE_SIZE};
+use crate::arch::target::{
+    addr::{self, virt::Kernel, Physical, Virtual},
+    mmu::Table,
+};
 use bitflags::bitflags;
-use core::ops::{Add, Sub};
-
-/// A physical address. This is used to provide a type-safe way to represent
-/// physical addresses, and its implementation varies depending on the
-/// architecture.
-///
-/// A physical address represents a location in the physical memory of the
-/// system. Each physical address is unique, but cannot be used to access
-/// the memory and must be mapped to a virtual address before being used.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Physical(pub(crate) usize);
-
-impl Physical {
-    /// Return the index of the frame that contains the physical address.
-    /// This is useful to find the frame that contains the physical address,
-    /// which is used to map the physical address to a virtual address.
-    #[must_use]
-    pub const fn frame_idx(self) -> usize {
-        self.0 / PAGE_SIZE
-    }
-
-    /// Convert a physical address to a `usize`.
-    #[must_use]
-    pub const fn as_usize(&self) -> usize {
-        self.0
-    }
-
-    /// Align down the physical address to the given alignment. The alignment
-    /// must be a power of two, otherwise the result will be incorrect. If the
-    /// physical address is already aligned to the given alignment, the address
-    /// will not be changed.
-    #[must_use]
-    pub const fn align_down(self, align: usize) -> Self {
-        debug_assert!(align.is_power_of_two());
-        Self(self.0 & !(align - 1))
-    }
-
-    /// Align up the physical address to the given alignment. The alignment
-    /// must be a power of two, otherwise the result will be incorrect. If the
-    /// physical address is already aligned to the given alignment, the address
-    /// will not be changed.
-    #[must_use]
-    pub const fn align_up(self, align: usize) -> Self {
-        debug_assert!(align.is_power_of_two());
-        Self((self.0 + align - 1) & !(align - 1))
-    }
-
-    /// Verify if the physical address is aligned to the given alignment. The
-    /// alignment must be a power of two, otherwise the result will be
-    /// incorrect.
-    #[must_use]
-    pub const fn is_aligned(self, align: usize) -> bool {
-        debug_assert!(align.is_power_of_two());
-        self.0 & (align - 1) == 0
-    }
-}
-
-impl From<Physical> for usize {
-    fn from(physical: Physical) -> Self {
-        physical.0
-    }
-}
-
-impl Add<usize> for Physical {
-    type Output = Self;
-
-    fn add(self, rhs: usize) -> Self::Output {
-        Self::new(self.0 + rhs)
-    }
-}
-
-impl Sub<usize> for Physical {
-    type Output = Self;
-
-    fn sub(self, rhs: usize) -> Self::Output {
-        Self::new(self.0 - rhs)
-    }
-}
-
-/// A virtual address. This is used to provide a type-safe way to represent
-/// virtual addresses, and its implementation varies depending on the
-/// architecture.
-///
-/// A virtual address represents a location in the virtual memory of the
-/// system. Different virtual addresses can point to the same physical
-/// address, and the translation between virtual and physical addresses
-/// is done by the Memory Management Unit (MMU) of the system.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Virtual(pub(crate) usize);
-
-impl Virtual {
-    /// Convert a virtual address to a `usize`.
-    #[must_use]
-    pub const fn as_usize(&self) -> usize {
-        self.0
-    }
-
-    /// Align down the virtual address to the given alignment. The alignment
-    /// must be a power of two, otherwise the result will be incorrect. If the
-    /// virtual address is already aligned to the given alignment, the address
-    /// will not be changed.
-    #[must_use]
-    pub const fn align_down(self, align: usize) -> Self {
-        debug_assert!(align.is_power_of_two());
-        Self(self.0 & !(align - 1))
-    }
-
-    /// Align up the virtual address to the given alignment. The alignment must
-    /// be a power of two, otherwise the result will be incorrect. If the
-    /// virtual address is already aligned to the given alignment, the address
-    /// will not be changed.
-    #[must_use]
-    pub const fn align_up(self, align: usize) -> Self {
-        debug_assert!(align.is_power_of_two());
-        Self((self.0 + align - 1) & !(align - 1))
-    }
-
-    /// Verify if the virtual address is aligned to the given alignment. The
-    /// alignment must be a power of two, otherwise the result will be
-    /// incorrect.
-    #[must_use]
-    pub const fn is_aligned(self, align: usize) -> bool {
-        debug_assert!(align.is_power_of_two());
-        self.0 & (align - 1) == 0
-    }
-
-    /// Create a new virtual address from a raw pointer.
-    #[must_use]
-    pub fn from_ptr<T>(ptr: *const T) -> Self {
-        Self(ptr as usize)
-    }
-
-    /// Convert the virtual address to a mutable raw pointer.
-    #[must_use]
-    pub const fn as_mut_ptr<T>(self) -> *mut T {
-        self.0 as *mut T
-    }
-
-    /// Convert the virtual address to a raw pointer.
-    #[must_use]
-    pub const fn as_ptr<T>(self) -> *const T {
-        self.0 as *const T
-    }
-}
-
-impl From<Virtual> for usize {
-    fn from(virt: Virtual) -> Self {
-        virt.0
-    }
-}
-
-impl Add<usize> for Virtual {
-    type Output = Self;
-
-    fn add(self, rhs: usize) -> Self::Output {
-        Self::new(self.0 + rhs)
-    }
-}
-
-impl Sub<usize> for Virtual {
-    type Output = Self;
-
-    fn sub(self, rhs: usize) -> Self::Output {
-        Self::new(self.0 - rhs)
-    }
-}
 
 pub trait Align {
     /// Assume that the value is a address and return the address aligned to
@@ -179,7 +16,7 @@ pub trait Align {
     /// pages that it represents. If the value is not a multiple of the page
     /// size, the result will be rounded up to the nearest page.
     #[must_use]
-    fn page_count_down(&self) -> Self;
+    fn page_count_down(&self) -> usize;
 
     /// Assume that the value is a address and return the address aligned to
     /// the nearest next page. If the address is already aligned to the page
@@ -191,15 +28,15 @@ pub trait Align {
     /// that it represents. If the value is not a multiple of the page size,
     /// the result will be rounded up to the nearest page.
     #[must_use]
-    fn page_count_up(&self) -> Self;
+    fn page_count_up(&self) -> usize;
 }
 
 impl Align for usize {
-    fn page_count_down(&self) -> Self {
+    fn page_count_down(&self) -> usize {
         self / PAGE_SIZE
     }
 
-    fn page_count_up(&self) -> Self {
+    fn page_count_up(&self) -> usize {
         (self + PAGE_SIZE - 1) / PAGE_SIZE
     }
 
@@ -213,12 +50,12 @@ impl Align for usize {
 }
 
 impl Align for u64 {
-    fn page_count_down(&self) -> Self {
-        self / PAGE_SIZE as u64
+    fn page_count_down(&self) -> usize {
+        (self / PAGE_SIZE as u64) as usize
     }
 
-    fn page_count_up(&self) -> Self {
-        (self + PAGE_SIZE as u64 - 1) / PAGE_SIZE as u64
+    fn page_count_up(&self) -> usize {
+        ((self + PAGE_SIZE as u64 - 1) / PAGE_SIZE as u64) as usize
     }
 
     fn page_align_down(&self) -> Self {
@@ -307,9 +144,9 @@ pub enum UnmapError {
 /// access it. The given rights and flags will be enforced by the Memory
 /// Management Unit (MMU) of the system, and the physical address will be
 /// translated to the virtual address when accessed by the kernel or the user.
-pub fn map(
+pub fn map<T: addr::virt::Type>(
     table: &mut Table,
-    virt: Virtual,
+    virt: Virtual<T>,
     phys: Physical,
     rights: Rights,
     flags: Flags,
@@ -320,7 +157,10 @@ pub fn map(
 /// Unmap a virtual address, returning the physical address that was previously
 /// mapped to it. If the virtual address was not mapped to any physical address,
 /// this function will return an error.
-pub fn unmap(table: &mut Table, virt: Virtual) -> Result<Physical, UnmapError> {
+pub fn unmap<T: addr::virt::Type>(
+    table: &mut Table,
+    virt: Virtual<T>,
+) -> Result<Physical, UnmapError> {
     crate::arch::target::mmu::unmap(table, virt)
 }
 
@@ -330,6 +170,6 @@ pub fn unmap(table: &mut Table, virt: Virtual) -> Result<Physical, UnmapError> {
 /// virtual address is too small. This should only happen on 32-bit systems
 /// with more than 4 GiB of RAM, which is not common.
 #[must_use]
-pub fn translate_physical(phys: Physical) -> Option<Virtual> {
+pub fn translate_physical(phys: Physical) -> Option<Virtual<Kernel>> {
     crate::arch::target::mmu::translate_physical(phys)
 }

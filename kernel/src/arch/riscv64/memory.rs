@@ -65,10 +65,10 @@ impl UsableMemory {
             );
 
             // The region 0x80000000 to 0x80200000 is reserved for the firmware
-            // The region kernel_start (0x80200000) to kernel_end is reserved for
-            // the kernel static code and data
-            // FIXME: Does assuming that the RAM cannot start before 0x80000000 is
-            // true for all riscv64 platforms ?
+            // The region kernel_start (0x80200000) to kernel_end is reserved
+            // for the kernel static code and data
+            // FIXME: Does assuming that the RAM cannot start before 0x80000000
+            // is true for all riscv64 platforms ?
             if start < kernel_physical_end {
                 length -= kernel_physical_end - 0x80000000;
                 start = kernel_physical_end;

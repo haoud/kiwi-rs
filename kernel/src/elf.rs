@@ -1,4 +1,10 @@
-use crate::{arch, pmm};
+use crate::{
+    arch::{
+        self,
+        target::addr::{virt::User, Virtual},
+    },
+    pmm,
+};
 
 /// Load an ELF file into memory and return a thread that can be executed.
 ///
@@ -51,7 +57,7 @@ pub fn load(file: &[u8]) -> arch::thread::Thread {
                 page,
                 file_offset
             );
-            let addr = arch::mmu::Virtual::new(page);
+            let addr = Virtual::<User>::new(page);
 
             let frame = pmm::allocate_frame(pmm::AllocationFlags::ZEROED)
                 .expect("Failed to allocate zeroed page");

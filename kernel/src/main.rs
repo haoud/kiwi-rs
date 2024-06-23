@@ -1,14 +1,18 @@
 //! TODO:
 //!     - Clippy lints
-//!     - Monolithic kernel
-//!         * Reserve some memory for the kernel to avoid panicking
-//!     - Executor than can mix user and kernel task
-//!     - Proper async suspend: If this is an user task that is suspended,
-//!     save it quantum and restore it when resumed
+//!     - Async:
+//!         * Multi purpose executor (can execute user and kernel task)
+//!         * Proper user task quantum management
 //!     - Reduce memory usage for the physical memory management
 //!         * Use a bitfield to track the memory usage
-//!     - Request memory used during the boot process
+//!         * Use a starting address to avoid reserved memory to take a huge
+//!         * part of the bitmap
+//!     - Create an align crate
+//!         - Aligned<T, N> to make sure that T is N aligned
+//!         - Align a type to specific layout
 //!     - Create an addr crate to handle addresses
+//!         - Physical + alias Aligned<Physical, PAGE_SIZE> = Frame
+//!         - Virtual<Kernel> and Virtual<User> + VirtualFrame
 #![no_std]
 #![no_main]
 #![feature(panic_info_message)]
@@ -18,7 +22,6 @@ pub mod elf;
 pub mod future;
 pub mod heap;
 pub mod pmm;
-pub mod process;
 
 extern crate alloc;
 

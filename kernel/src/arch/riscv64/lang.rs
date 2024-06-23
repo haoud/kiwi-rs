@@ -11,6 +11,7 @@ extern "C" {
 /// microkernel, this should never happen. If it does, it means that there is a
 /// bug in the kernel. It will print some information about the panic if the
 /// `log` feature is enabled and then stop the kernel forever.
+#[cold]
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     if let Some(location) = info.location() {

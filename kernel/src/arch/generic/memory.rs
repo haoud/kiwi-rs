@@ -1,4 +1,4 @@
-use crate::arch::mmu::{self, Physical};
+use crate::arch::{self, target::addr::Physical};
 use heapless::Vec;
 
 /// A structure representing the usable memory regions of the system. It is
@@ -50,7 +50,7 @@ impl UsableMemory {
         // required for the type T.
         if align < core::mem::align_of::<T>() {
             ::log::error!(
-                "Object {} requires an alignment of at least {}, but {} was given",
+                "Object {} requires alignment of at least {} ({} requested)",
                 core::any::type_name::<T>(),
                 core::mem::align_of::<T>(),
                 align
@@ -83,7 +83,7 @@ impl UsableMemory {
             })?;
 
         // Return the allocated pointer
-        Some(Physical(region.start))
+        Some(Physical::new(region.start))
     }
 
     /// Allocate a page of memory using the available memory regions. It will
@@ -95,8 +95,9 @@ impl UsableMemory {
         let page = self.allocate_page()?;
         unsafe {
             core::ptr::write_bytes(
-                crate::arch::mmu::translate_physical(page).unwrap().0
-                    as *mut u8,
+                arch::mmu::translate_physical(page)
+                    .unwrap()
+                    .as_mut_ptr::<u8>(),
                 0,
                 4096,
             );
@@ -116,14 +117,14 @@ impl UsableMemory {
     /// guaranteed to be page aligned. If no regions are available, the
     /// function will return 0.
     #[must_use]
-    pub fn last_address(&self) -> mmu::Physical {
+    pub fn last_address(&self) -> Physical {
         // Find the region with the highest end address
         self.regions
             .iter()
             .max_by_key(|region| region.start + region.length)
-            .map(|region| mmu::Physical(region.start + region.length))
+            .map(|region| Physical::new(region.start + region.length))
             .map(|addr| addr.page_align_down())
-            .unwrap_or(mmu::Physical(0))
+            .unwrap_or(Physical::zero())
     }
 
     /// Convert the usable memory into a list of free memory regions.
@@ -149,7 +150,7 @@ pub struct Region {
 impl Region {
     /// Return the end address of the region
     #[must_use]
-    pub fn end(&self) -> mmu::Physical {
-        mmu::Physical(self.start + self.length)
+    pub fn end(&self) -> Physical {
+        Physical::new(self.start + self.length)
     }
 }
