@@ -43,6 +43,23 @@ impl UsableMemory {
             .map(|r| r.size.unwrap_or(0))
             .sum::<usize>();
 
+        let ram_start = device_tree
+            .memory()
+            .regions()
+            .map(|region| region.starting_address as usize)
+            .min()
+            .unwrap();
+
+        let ram_end = device_tree
+            .memory()
+            .regions()
+            .map(|region| {
+                let start = region.starting_address as usize;
+                start + region.size.unwrap_or(0)
+            })
+            .max()
+            .unwrap();
+
         log::info!("Total memory: {} kiB", total_memory / 1024);
         log::info!("Firmware memory: {} KiB", firmware_memory / 1024);
         log::info!("Kernel memory: {} kiB", kernel_memory / 1024);
@@ -50,6 +67,8 @@ impl UsableMemory {
             "Reclaimable memory: {} KiB",
             (kernel_reclaimable_end - kernel_reclaimable_start) / 1024
         );
+        log::debug!("RAM start: 0x{:016x}", ram_start);
+        log::debug!("RAM end: 0x{:016x}", ram_end);
 
         // Iterate over all the memory regions in the device tree and add
         // them to the usable memory regions
@@ -57,12 +76,6 @@ impl UsableMemory {
         for region in device_tree.memory().regions() {
             let mut start = region.starting_address as usize;
             let mut length = region.size.unwrap_or(0);
-
-            ::log::debug!(
-                "Available memory region: {:#010x} - {:#010x}",
-                start,
-                start + length
-            );
 
             // The region 0x80000000 to 0x80200000 is reserved for the firmware
             // The region kernel_start (0x80200000) to kernel_end is reserved
@@ -77,6 +90,12 @@ impl UsableMemory {
             regions
                 .push(Region { start, length })
                 .expect("Failed to push region");
+
+            ::log::debug!(
+                "Available memory region: {:#010x} - {:#010x}",
+                start,
+                start + length
+            );
         }
 
         Self {
@@ -84,6 +103,8 @@ impl UsableMemory {
             total_memory,
             kernel_memory,
             firmware_memory,
+            ram_start,
+            ram_end,
         }
     }
 }

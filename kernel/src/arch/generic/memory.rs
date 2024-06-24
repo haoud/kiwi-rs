@@ -17,6 +17,13 @@ pub struct UsableMemory {
 
     /// The total amount of memory available.
     pub total_memory: usize,
+
+    /// The starting address of the RAM. On some architecture, addresses below
+    /// a certain address are used for I/O memory mapped devices.
+    pub ram_start: usize,
+
+    /// The end address of the RAM.
+    pub ram_end: usize,
 }
 
 impl UsableMemory {
@@ -28,12 +35,16 @@ impl UsableMemory {
         firmware_memory: usize,
         kernel_memory: usize,
         total_memory: usize,
+        ram_start: usize,
+        ram_end: usize,
     ) -> Self {
         Self {
             regions,
             firmware_memory,
             kernel_memory,
             total_memory,
+            ram_start,
+            ram_end,
         }
     }
 
@@ -133,6 +144,12 @@ impl UsableMemory {
         self.regions
     }
 
+    /// Return the total size of the RAM
+    #[must_use]
+    pub const fn ram_size(&self) -> usize {
+        self.ram_end - self.ram_start
+    }
+
     /// Return the size of the usable memory regions in bytes.
     #[must_use]
     pub fn size(&self) -> usize {
@@ -150,7 +167,7 @@ pub struct Region {
 impl Region {
     /// Return the end address of the region
     #[must_use]
-    pub fn end(&self) -> Physical {
-        Physical::new(self.start + self.length)
+    pub fn end(&self) -> usize {
+        self.start + self.length
     }
 }

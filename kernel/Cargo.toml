@@ -46,4 +46,5 @@ log = "0.4.21"
 [profile.release]
 codegen-units = 1
 opt-level = "s"
+strip = true
 lto = true
