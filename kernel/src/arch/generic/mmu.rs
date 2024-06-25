@@ -1,6 +1,6 @@
 pub use crate::arch::target::mmu::{PAGE_SHIFT, PAGE_SIZE};
 use crate::arch::target::{
-    addr::{self, virt::Kernel, Physical, Virtual},
+    addr::{self, virt::Kernel, Frame4Kib, Physical, Virtual},
     mmu::Table,
 };
 use bitflags::bitflags;
@@ -83,7 +83,8 @@ bitflags! {
 
         const RX = Self::READ.bits() | Self::EXECUTE.bits();
         const RW = Self::READ.bits() | Self::WRITE.bits();
-        const RWX = Self::READ.bits() | Self::WRITE.bits() | Self::EXECUTE.bits();
+        const RWX = Self::RW.bits() | Self::EXECUTE.bits();
+        const RWXU = Self::RWX.bits() | Self::USER.bits();
     }
 
     /// A set of flags that can be used to control the behavior
@@ -96,18 +97,6 @@ bitflags! {
         /// to security issues or strange bugs that will be very, very hard
         /// to debug.
         const GLOBAL = 1 << 0;
-
-        /// Use a page size of 2 MiB instead of the default 4 KiB. This can be
-        /// used to reduce the number of entries in the page table and improve
-        /// the performance of the system and reduce the memory usage. However,
-        /// the given physical address must be aligned to 2 MiB.
-        const HUGE_2MB = 1 << 1;
-
-        /// Use a page size of 1 GiB instead of the default 4 KiB. This can be
-        /// used to reduce the number of entries in the page table and improve
-        /// the performance of the system and reduce the memory usage. However,
-        /// the given physical address must be aligned to 1 GiB.
-        const HUGE_1GB = 1 << 2;
     }
 }
 
@@ -147,11 +136,11 @@ pub enum UnmapError {
 pub fn map<T: addr::virt::Type>(
     table: &mut Table,
     virt: Virtual<T>,
-    phys: Physical,
+    frame: Frame4Kib,
     rights: Rights,
     flags: Flags,
 ) -> Result<(), MapError> {
-    crate::arch::target::mmu::map(table, virt, phys, rights, flags)
+    crate::arch::target::mmu::map(table, virt, frame, rights, flags)
 }
 
 /// Unmap a virtual address, returning the physical address that was previously
@@ -170,6 +159,8 @@ pub fn unmap<T: addr::virt::Type>(
 /// virtual address is too small. This should only happen on 32-bit systems
 /// with more than 4 GiB of RAM, which is not common.
 #[must_use]
-pub fn translate_physical(phys: Physical) -> Option<Virtual<Kernel>> {
+pub fn translate_physical(
+    phys: impl Into<Physical>,
+) -> Option<Virtual<Kernel>> {
     crate::arch::target::mmu::translate_physical(phys)
 }

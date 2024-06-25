@@ -67,7 +67,7 @@ pub fn load(file: &[u8]) -> arch::thread::Thread {
                 thread.table_mut(),
                 addr,
                 frame,
-                arch::mmu::Rights::RWX | arch::mmu::Rights::USER,
+                arch::mmu::Rights::RWXU,
                 arch::mmu::Flags::empty(),
             )
             .expect("Failed to map page");

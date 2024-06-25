@@ -1,6 +1,5 @@
+use crate::{arch::mmu, utils::align::IsAligned};
 use core::marker::PhantomData;
-
-use crate::arch::mmu;
 
 /// A kernel virtual address.
 pub struct Kernel;
@@ -208,5 +207,11 @@ impl<T: Type> From<Virtual<T>> for usize {
 impl<T: Type> From<Virtual<T>> for u64 {
     fn from(addr: Virtual<T>) -> Self {
         addr.as_u64()
+    }
+}
+
+impl<T: Type> IsAligned for Virtual<T> {
+    fn is_aligned(&self, align: usize) -> bool {
+        (self.addr & (align - 1)) == 0
     }
 }

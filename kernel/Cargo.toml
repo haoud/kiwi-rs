@@ -30,7 +30,7 @@ logging = []
 members = [
     "crates/config",
     "crates/macros",
-    "crates/seqlock"
+    "crates/seqlock",
 ]
 
 [workspace.dependencies]

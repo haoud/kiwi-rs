@@ -1,4 +1,7 @@
-use crate::arch::{self, target::addr::Physical};
+use crate::arch::{
+    self,
+    target::addr::{Frame4Kib, Physical},
+};
 use heapless::Vec;
 
 /// A structure representing the usable memory regions of the system. It is
@@ -102,26 +105,27 @@ impl UsableMemory {
     /// pointer to the allocated **physical** page. The page is guaranteed to
     /// be zeroed.
     #[must_use]
-    pub fn allocate_zeroed_page(&mut self) -> Option<Physical> {
-        let page = self.allocate_page()?;
+    pub fn allocate_zeroed_page(&mut self) -> Option<Frame4Kib> {
+        let frame = self.allocate_page()?;
         unsafe {
             core::ptr::write_bytes(
-                arch::mmu::translate_physical(page)
+                arch::mmu::translate_physical(frame)
                     .unwrap()
                     .as_mut_ptr::<u8>(),
                 0,
                 4096,
             );
         }
-        Some(page)
+        Some(frame)
     }
 
     /// Allocate a page of memory using the available memory regions. It will
     /// update the region list to reflect the allocation and will return a
     /// pointer to the allocated **physical** page.
     #[must_use]
-    pub fn allocate_page(&mut self) -> Option<Physical> {
+    pub fn allocate_page(&mut self) -> Option<Frame4Kib> {
         self.allocate_memory::<[u8; 4096]>(4096, 4096)
+            .map(Frame4Kib::new)
     }
 
     /// Find the last usable address in the memory regions. This address is

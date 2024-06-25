@@ -7,12 +7,6 @@
 //!         * Use a bitfield to track the memory usage
 //!         * Use a starting address to avoid reserved memory to take a huge
 //!         * part of the bitmap
-//!     - Create an align crate
-//!         - Aligned<T, N> to make sure that T is N aligned
-//!         - Align a type to specific layout
-//!     - Create an addr crate to handle addresses
-//!         - Physical + alias Aligned<Physical, PAGE_SIZE> = Frame
-//!         - Virtual<Kernel> and Virtual<User> + VirtualFrame
 #![no_std]
 #![no_main]
 #![feature(panic_info_message)]
@@ -22,6 +16,7 @@ pub mod elf;
 pub mod future;
 pub mod heap;
 pub mod pmm;
+pub mod utils;
 
 extern crate alloc;
 

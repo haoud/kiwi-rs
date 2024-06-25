@@ -1,8 +1,7 @@
+use crate::{arch::mmu, utils::align::IsAligned};
 use core::ops::{
     Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign,
 };
-
-use crate::arch::mmu;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
@@ -120,7 +119,7 @@ impl Physical {
     /// # Panics
     /// Panic if the alignement is not a power of two.
     #[must_use]
-    pub const fn is_aligned(self, align: usize) -> bool {
+    pub const fn is_aligned_to(self, align: usize) -> bool {
         assert!(align.is_power_of_two());
         self.0 & (align - 1) == 0
     }
@@ -319,5 +318,11 @@ impl DivAssign<usize> for Physical {
 impl DivAssign<u64> for Physical {
     fn div_assign(&mut self, rhs: u64) {
         *self = *self / rhs;
+    }
+}
+
+impl IsAligned for Physical {
+    fn is_aligned(&self, align: usize) -> bool {
+        self.is_aligned_to(align)
     }
 }

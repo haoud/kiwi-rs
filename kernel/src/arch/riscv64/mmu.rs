@@ -2,14 +2,15 @@
 //! implementation only handle SV39 paging, which should be supported by all
 //! RISC-V64 systems and should be enough for most use cases. However, it is
 //! possible to add support for other paging modes in the future.
+use super::addr::{
+    self, virt::Kernel, Frame1Gib, Frame4Kib, Physical, Virtual,
+};
 use crate::{
     arch::mmu::{Flags, MapError, Rights, UnmapError},
     pmm::{self, AllocationFlags},
 };
 use bitflags::bitflags;
 use core::ops::{Index, IndexMut};
-
-use super::addr::{self, virt::Kernel, Physical, Virtual};
 
 /// The kernel's page table. This table is used by the kernel to identity
 /// map the physical memory of the system, allowing the kernel to easily
@@ -27,7 +28,8 @@ pub const KERNEL_VIRTUAL_BASE: Virtual<Kernel> =
 /// The physical address where the RAM starts. This address will be mapped
 /// to the kernel's address space at the address defined by
 /// `KERNEL_VIRTUAL_BASE`.
-pub const KERNEL_PHYSICAL_BASE: Physical = Physical::new(0x8000_0000);
+pub const KERNEL_PHYSICAL_BASE: Frame1Gib =
+    unsafe { Frame1Gib::new_unchecked(Physical::new(0x8000_0000)) };
 
 /// The start of ther kernel's address space. This corresponds to the first
 /// address after the 'canonical hole' in the virtual address space and goes
@@ -143,8 +145,8 @@ impl Entry {
     /// level of the page table, the physical address must be aligned to
     /// 0x40000000 (1 GiB).
     #[must_use]
-    pub const fn new(physical: Physical) -> Self {
-        Self((physical.as_u64() & !0x3FF) >> 2)
+    pub const fn new(frame: Frame4Kib) -> Self {
+        Self((frame.inner().as_u64() & !0x3FF) >> 2)
     }
 
     /// Set the access rights of the entry.
@@ -254,9 +256,9 @@ impl Entry {
     /// Set the physical address that the entry points to. The physical address
     /// must be properly aligned, depending on the level of the page table that
     /// this entry is part of.
-    pub fn set_address(&mut self, physical: Physical) {
+    pub fn set_address<T: Into<Frame4Kib>>(&mut self, frame: T) {
         self.0 &= 0x3FF;
-        self.0 |= (physical.as_u64() & !0xFFF) >> 2;
+        self.0 |= (frame.into().inner().as_u64() & !0xFFF) >> 2;
     }
 
     /// Check if the entry is present, meaning that the page is mapped to a
@@ -433,7 +435,9 @@ pub fn setup() {
     // to manually map each page.
     for i in 256..511 {
         let entry = &mut table[i];
-        entry.set_address(Physical::new((i - 256) * 0x4000_0000));
+        entry.set_address(Frame1Gib::new(Physical::new(
+            (i - 256) * 0x4000_0000,
+        )));
         entry.set_executable(true);
         entry.set_writable(true);
         entry.set_readable(true);
@@ -459,25 +463,11 @@ pub fn setup() {
 pub fn map<T: addr::virt::Type>(
     root: &mut Table,
     virt: Virtual<T>,
-    phys: Physical,
+    frame: Frame4Kib,
     rights: Rights,
     flags: Flags,
 ) -> Result<(), MapError> {
-    // Compute the alignment required for the physical address depending on
-    // the flags given as well as the required level to traverse in order
-    // to map the physical address.
-    let (align, target_level) = if flags.contains(Flags::HUGE_1GB) {
-        (0x40000000, 2)
-    } else if flags.contains(Flags::HUGE_2MB) {
-        (0x200000, 1)
-    } else {
-        (0x1000, 0)
-    };
-
-    // Check if the physical address is properly aligned.
-    if !phys.is_aligned(align) {
-        return Err(MapError::FrameNotAligned);
-    }
+    // TODO: Huge pages support
 
     // Extract the VPNs from the virtual address.
     let vpn = [
@@ -487,22 +477,17 @@ pub fn map<T: addr::virt::Type>(
     ];
 
     let mut entry = &mut root[vpn[2]];
-    for i in (target_level..2).rev() {
+    for i in (0..2).rev() {
         if !entry.present() {
-            if align == PAGE_SIZE {
-                // Allocate a new zeroed frame with the kernel flag set and
-                // create a new leaf entry.
-                let flags = AllocationFlags::KERNEL | AllocationFlags::ZEROED;
-                let frame =
-                    pmm::allocate_frame(flags).ok_or(MapError::OutOfMemory)?;
+            // Allocate a new zeroed frame with the kernel flag set and
+            // create a new leaf entry.
+            let flags = AllocationFlags::KERNEL | AllocationFlags::ZEROED;
+            let frame =
+                pmm::allocate_frame(flags).ok_or(MapError::OutOfMemory)?;
 
-                entry.clear();
-                entry.set_address(frame);
-                entry.set_present(true);
-            } else {
-                // TODO: Allocate a new frame and create a new table.
-                todo!();
-            }
+            entry.clear();
+            entry.set_address(frame);
+            entry.set_present(true);
         }
 
         // Get the next table from the current entry and continue the traversal
@@ -515,7 +500,7 @@ pub fn map<T: addr::virt::Type>(
     }
 
     // Update the entry with the physical address, rights and flags given.
-    entry.set_address(phys);
+    entry.set_address(frame);
     entry.set_present(true);
     entry.set_rights(rights);
     entry.set_flags(flags);
@@ -566,9 +551,11 @@ pub fn unmap<T: addr::virt::Type>(
 /// virtual address representable by the system, this function will return
 /// `None`.
 #[must_use]
-pub fn translate_physical(phys: Physical) -> Option<Virtual<Kernel>> {
+pub fn translate_physical(
+    phys: impl Into<Physical>,
+) -> Option<Virtual<Kernel>> {
     Some(Virtual::<Kernel>::new(
-        usize::from(KERNEL_START) + usize::from(phys),
+        usize::from(KERNEL_START) + usize::from(phys.into()),
     ))
 }
 
@@ -587,7 +574,7 @@ pub fn translate_virtual_kernel(virt: Virtual<Kernel>) -> Physical {
     } else if virt.as_usize() >= KERNEL_START.as_usize() {
         Physical::new(virt.as_usize() - KERNEL_START.as_usize())
     } else {
-        panic!("Virtual address is not in the kernel's address space");
+        unreachable!();
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::arch::{
     self,
     mmu::{self, Align, PAGE_SIZE},
-    target::addr::Physical,
+    target::addr::{Frame4Kib, Physical},
 };
 use bitflags::bitflags;
 use seqlock::Seqlock;
@@ -131,8 +131,8 @@ pub fn setup(mut memory: arch::memory::UsableMemory) {
 /// Allocate a frame. Returns `None` if no frame is available, or a frame if a
 /// frame was successfully allocated.
 #[must_use]
-pub fn allocate_frame(flags: AllocationFlags) -> Option<Physical> {
-    allocate_range(1, flags)
+pub fn allocate_frame(flags: AllocationFlags) -> Option<Frame4Kib> {
+    allocate_range(1, flags).map(Frame4Kib::new)
 }
 
 /// Allocate a contiguous range of frames. Returns `None` if no contiguous
@@ -167,7 +167,7 @@ pub fn allocate_range(
 
     // Zero the frames if requested
     if flags.contains(AllocationFlags::ZEROED) {
-        let ptr = arch::mmu::translate_physical(index2phys(start))
+        let ptr = arch::mmu::translate_physical(index2frame(start))
             .expect("Failed to translate physical address")
             .as_mut_ptr::<u8>();
 
@@ -178,7 +178,7 @@ pub fn allocate_range(
         }
     }
 
-    Some(index2phys(start))
+    Some(Physical::from(index2frame(start)))
 }
 
 /// Deallocate a frame
@@ -239,14 +239,14 @@ pub fn kernel_memory_pages() -> usize {
         .count()
 }
 
-/// Convert a frame index to a physical address
+/// Convert a frame index to a frame address
 ///
 /// # Panics
 /// Panics if the resulting physical address would be invalid (greater than
 /// [`Physical::MAX`])
 #[must_use]
-fn index2phys(index: usize) -> Physical {
-    Physical::new(RAM_START.read() + index * mmu::PAGE_SIZE)
+fn index2frame(index: usize) -> Frame4Kib {
+    Frame4Kib::new(Physical::new(RAM_START.read() + index * mmu::PAGE_SIZE))
 }
 
 /// Convert a physical address to an index into the bitmap
