@@ -376,7 +376,7 @@ impl Entry {
             None
         } else {
             let table = translate_physical(self.address())
-                .unwrap()
+                .expect("Failed to translate table physical address")
                 .as_mut_ptr::<Table>();
             Some(&mut *(table))
         }
@@ -593,15 +593,13 @@ pub fn translate_physical(
 /// i.e. if it is not greater than or equal to `KERNEL_START`.
 #[must_use]
 pub fn translate_virtual_kernel(virt: Virtual<Kernel>) -> Physical {
-    if virt.as_usize() >= KERNEL_VIRTUAL_BASE.as_usize() {
+    if virt >= KERNEL_VIRTUAL_BASE {
         Physical::new(
-            virt.as_usize() - KERNEL_VIRTUAL_BASE.as_usize()
+            usize::from(virt) - usize::from(KERNEL_VIRTUAL_BASE)
                 + KERNEL_PHYSICAL_BASE.as_usize(),
         )
-    } else if virt.as_usize() >= KERNEL_START.as_usize() {
-        Physical::new(virt.as_usize() - KERNEL_START.as_usize())
     } else {
-        unreachable!();
+        Physical::new(usize::from(virt) - usize::from(KERNEL_START))
     }
 }
 

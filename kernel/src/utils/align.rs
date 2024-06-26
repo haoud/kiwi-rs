@@ -1,4 +1,4 @@
-use core::ops::Deref;
+use core::{fmt::Debug, ops::Deref};
 use usize_cast::IntoUsize;
 
 /// A trait to verify that an object is aligned
@@ -59,12 +59,44 @@ impl<T: IsAligned, const N: usize> Aligned<T, N> {
     }
 }
 
+impl<T: IsAligned + Debug, const N: usize> Debug for Aligned<T, N> {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        f.debug_tuple("Aligned").field(&self.0).finish()
+    }
+}
+
 impl<T: IsAligned + Copy + Clone, const N: usize> Copy for Aligned<T, N> {}
 
 impl<T: IsAligned, const N: usize> Deref for Aligned<T, N> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl<T: IsAligned + PartialEq, const N: usize> PartialEq for Aligned<T, N> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<T: IsAligned + Eq, const N: usize> Eq for Aligned<T, N> {}
+
+impl<T: IsAligned + PartialOrd, const N: usize> PartialOrd for Aligned<T, N> {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        self.0.partial_cmp(&other.0)
+    }
+}
+
+impl<T: IsAligned + Ord, const N: usize> Ord for Aligned<T, N> {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.0.cmp(&other.0)
+    }
+}
+
+impl<T: IsAligned + Default, const N: usize> Default for Aligned<T, N> {
+    fn default() -> Self {
+        Self(T::default())
     }
 }
 

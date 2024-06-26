@@ -59,7 +59,7 @@ impl talc::OomHandler for OomHandler {
         // satisfy the allocation request.
         let base = pmm::allocate_range(
             Self::ALLOCATION_FRAMES_COUNT,
-            pmm::AllocationFlags::KERNEL,
+            pmm::AllocationFlags::ZEROED | pmm::AllocationFlags::KERNEL,
         )
         .ok_or(())?;
 

@@ -39,22 +39,16 @@ pub fn shutdown() {
 /// will be raised when the timer will reach the given duration.
 ///
 /// # Panics
-/// Panics if the duration (in nanoseconds) is too large to fit in a u64. This
-/// should never happen as a u64 can represent up to 580 years in nanoseconds,
-/// which is more than enough for any practical use.
-/// This function also panics if the SBI call to set the timer fails.
+/// Panics if the SBI call to set the timer fails.
 pub fn next_event(next: core::time::Duration) {
-    // Convert the duration to nanoseconds. It should fit in a
-    // u64 and should be enough to represent the time until the
-    // next trigger.
-    let nano = u64::try_from(next.as_nanos())
-        .expect("Duration in nanoseconds is too large to to fit in a u64");
+    let secs = next.as_secs() * 1_000_000_000;
+    let nanos = u64::from(next.subsec_nanos());
 
     // Read the current clock value and add the duration to it.
     // It convert the duration to the clock internal ticks and
     // set the timer to the new value using the SBI.
     let current = riscv::register::time::read64();
-    let next = current + nano / internal_tick();
+    let next = current + (secs + nanos) / internal_tick();
     sbi::timer::set_timer(next).unwrap();
 }
 

@@ -1,5 +1,5 @@
 use crate::{arch::mmu, utils::align::IsAligned};
-use core::marker::PhantomData;
+use core::{iter::Step, marker::PhantomData};
 
 /// A kernel virtual address.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -136,6 +136,26 @@ impl Virtual<User> {
     }
 }
 
+impl Step for Virtual<User> {
+    /// The number of steps between two user virtual addresses is simply the
+    /// difference between the two addresses.
+    fn steps_between(start: &Self, end: &Self) -> Option<usize> {
+        if end.addr >= start.addr {
+            Some(end.addr - start.addr)
+        } else {
+            None
+        }
+    }
+
+    fn forward_checked(start: Self, count: usize) -> Option<Self> {
+        Self::try_new(start.addr + count)
+    }
+
+    fn backward_checked(start: Self, count: usize) -> Option<Self> {
+        Self::try_new(start.addr - count)
+    }
+}
+
 impl Virtual<Kernel> {
     /// The minimum valid kernel virtual address, assuming a 39-bit virtual
     /// address space.
@@ -216,5 +236,31 @@ impl<T: Type> From<Virtual<T>> for u64 {
 impl<T: Type> IsAligned for Virtual<T> {
     fn is_aligned(&self, align: usize) -> bool {
         (self.addr & (align - 1)) == 0
+    }
+}
+
+impl Step for Virtual<Kernel> {
+    /// The number of steps between two kernel virtual addresses is
+    /// simply the difference between the two addresses.
+    fn steps_between(start: &Self, end: &Self) -> Option<usize> {
+        if end.addr >= start.addr {
+            Some(end.addr - start.addr)
+        } else {
+            None
+        }
+    }
+
+    /// Advances the virtual address by `count` bytes. If the resulting
+    /// address is not in the kernel address space or overflows, then
+    /// `None` is returned.
+    fn forward_checked(start: Self, count: usize) -> Option<Self> {
+        Self::try_new(start.addr.checked_add(count)?)
+    }
+
+    /// Retreats the virtual address by `count` bytes. If the resulting
+    /// address is not in the kernel address space or underflows, then
+    /// `None` is returned.
+    fn backward_checked(start: Self, count: usize) -> Option<Self> {
+        Self::try_new(start.addr.checked_sub(count)?)
     }
 }

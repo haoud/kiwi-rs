@@ -85,7 +85,7 @@ pub fn load(file: &[u8]) -> arch::thread::Thread {
                 core::cmp::min(arch::mmu::PAGE_SIZE - misalign, remaning);
             let src = file.as_ptr().wrapping_add(file_offset);
             let dst = arch::mmu::translate_physical(frame)
-                .unwrap()
+                .expect("Failed to translate physical address")
                 .as_mut_ptr::<u8>()
                 .wrapping_add(misalign);
 

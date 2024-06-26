@@ -1,6 +1,7 @@
 use crate::{arch::mmu, utils::align::IsAligned};
-use core::ops::{
-    Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign,
+use core::{
+    iter::Step,
+    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign},
 };
 use usize_cast::IntoUsize;
 
@@ -327,5 +328,30 @@ impl DivAssign<u64> for Physical {
 impl IsAligned for Physical {
     fn is_aligned(&self, align: usize) -> bool {
         self.is_aligned_to(align)
+    }
+}
+
+impl Step for Physical {
+    /// The number of steps between two physical addresses is simply
+    /// the difference between the two addresses value !
+    fn steps_between(start: &Self, end: &Self) -> Option<usize> {
+        if end.0 >= start.0 {
+            Some(end.0 - start.0)
+        } else {
+            None
+        }
+    }
+
+    /// Advances the physical address by `count` bytes. If the address
+    /// overflows or is greater than the maximum physical address, then
+    /// `None` is returned.
+    fn forward_checked(start: Self, count: usize) -> Option<Self> {
+        Self::try_new(start.0.checked_add(count)?)
+    }
+
+    /// Retreats the physical address by `count` bytes. If the address
+    /// underflows, then `None` is returned.
+    fn backward_checked(start: Self, count: usize) -> Option<Self> {
+        Self::try_new(start.0.checked_sub(count)?)
     }
 }

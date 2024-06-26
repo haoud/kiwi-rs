@@ -7,12 +7,12 @@
 //!         * Use a starting address to avoid reserved memory to take a huge
 //!         * part of the bitmap
 //!     - Addresses comparaison, iterators and step trait
-//!     - `zerocopy` and `bytemck` crate for safer code
 #![no_std]
 #![no_main]
 #![warn(clippy::all)]
 #![warn(clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
+#![feature(step_trait)]
 #![feature(const_option)]
 #![feature(panic_info_message)]
 

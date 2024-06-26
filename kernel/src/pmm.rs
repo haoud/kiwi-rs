@@ -125,10 +125,12 @@ pub fn setup(mut memory: arch::memory::UsableMemory) {
 
     // Reserve the memory used by the firmware (OpenSBI)
     // TODO: Make this architecture agnostic
-    (0x8000_0000..0x8020_0000).for_each(|addr| {
-        bitmap[phys2index(addr)].flags &= !FrameFlags::KERNEL;
-        bitmap[phys2index(addr)].flags |= FrameFlags::FIRMWARE;
-    });
+    (0x8000_0000..0x8020_0000)
+        .step_by(arch::mmu::PAGE_SIZE)
+        .for_each(|addr| {
+            bitmap[phys2index(addr)].flags &= !FrameFlags::KERNEL;
+            bitmap[phys2index(addr)].flags |= FrameFlags::FIRMWARE;
+        });
 
     // Initialize the bitmap
     BITMAP.call_once(|| spin::Mutex::new(bitmap));
@@ -182,7 +184,7 @@ pub fn allocate_range(
             .expect("Failed to translate physical address")
             .as_mut_ptr::<u8>();
 
-        // SAFETY: Zeroing the frame is safe since it isn't used
+        // SAFETY: Zeroing the frames is safe since it isn't used
         // by anything else and will not cause undefined behavior
         unsafe {
             core::ptr::write_bytes(ptr, 0, PAGE_SIZE * count.get());
