@@ -2,13 +2,15 @@ use crate::{arch::mmu, utils::align::IsAligned};
 use core::marker::PhantomData;
 
 /// A kernel virtual address.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Kernel;
 
 /// A user virtual address.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct User;
 
 /// The type of a virtual address. Either `Kernel` or `User`.
-pub trait Type {}
+pub trait Type: Copy {}
 impl Type for Kernel {}
 impl Type for User {}
 
@@ -193,6 +195,7 @@ impl Virtual<Kernel> {
     /// # Panics
     /// This function will panic if the resulting address cannot fit into an
     /// `u64` (the address is greater than [`MAX`]).
+    #[must_use]
     pub const fn page_align_up(&self) -> Self {
         Self::new((self.addr + mmu::PAGE_SIZE - 1) & !(mmu::PAGE_SIZE - 1))
     }

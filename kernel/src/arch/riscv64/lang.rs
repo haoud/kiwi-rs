@@ -15,20 +15,12 @@ extern "C" {
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
     if let Some(location) = info.location() {
-        if let Some(message) = info.message() {
-            ::log::error!(
-                "Kernel panic at {}:{}: {}",
-                location.file(),
-                location.line(),
-                message
-            );
-        } else {
-            ::log::error!(
-                "Kernel panic at {}:{}",
-                location.file(),
-                location.line()
-            );
-        }
+        ::log::error!(
+            "Kernel panic at {}:{}: {}",
+            location.file(),
+            location.line(),
+            info.message()
+        );
     } else {
         ::log::error!("Kernel panic without location or message :(");
     }

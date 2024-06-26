@@ -7,6 +7,9 @@ static INTERNAL_TICK: Seqlock<u64> = Seqlock::new(0);
 /// Setup the timer subsystem. It will extract the timebase frequency from the
 /// device tree and calculate the internal tick value, which is the number of
 /// nanoseconds per tick.
+///
+/// # Panics
+/// Panics if no CPU information is found in the device tree.
 pub fn setup(device_tree: &fdt::Fdt) {
     log::info!("Initializing timer");
 
@@ -34,6 +37,12 @@ pub fn shutdown() {
 
 /// Set the next timer trigger to the given duration from now. An interrupt
 /// will be raised when the timer will reach the given duration.
+///
+/// # Panics
+/// Panics if the duration (in nanoseconds) is too large to fit in a u64. This
+/// should never happen as a u64 can represent up to 580 years in nanoseconds,
+/// which is more than enough for any practical use.
+/// This function also panics if the SBI call to set the timer fails.
 pub fn next_event(next: core::time::Duration) {
     // Convert the duration to nanoseconds. It should fit in a
     // u64 and should be enough to represent the time until the

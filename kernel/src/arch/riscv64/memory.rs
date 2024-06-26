@@ -12,6 +12,11 @@ extern "C" {
 impl UsableMemory {
     /// Create a new `UsableMemory` structure from the device tree given
     /// as argument.
+    ///
+    /// # Panics
+    /// This function will panic if there is no information about the memory
+    /// regions in the device tree, or if there are too many memory regions
+    /// in the device tree that we cannot handle.
     #[inline]
     #[must_use]
     pub fn new(device_tree: &fdt::Fdt) -> Self {
@@ -36,7 +41,7 @@ impl UsableMemory {
         };
 
         let kernel_memory = kernel_physical_end - kernel_physical_start;
-        let firmware_memory = 0x200000;
+        let firmware_memory = 0x0020_0000;
         let total_memory = device_tree
             .memory()
             .regions()
@@ -83,7 +88,7 @@ impl UsableMemory {
             // FIXME: Does assuming that the RAM cannot start before 0x80000000
             // is true for all riscv64 platforms ?
             if start < kernel_physical_end {
-                length -= kernel_physical_end - 0x80000000;
+                length -= kernel_physical_end - 0x8000_0000;
                 start = kernel_physical_end;
             }
 
@@ -100,9 +105,9 @@ impl UsableMemory {
 
         Self {
             regions,
-            total_memory,
-            kernel_memory,
             firmware_memory,
+            kernel_memory,
+            total_memory,
             ram_start,
             ram_end,
         }

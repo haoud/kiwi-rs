@@ -29,6 +29,7 @@ pub struct Context {
 
 impl Context {
     /// Create a new context.
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             registers: [0; 31],
@@ -79,6 +80,15 @@ pub fn handle_exception(_thread: &mut Thread) -> Resume {
             );
             Resume::Fault
         }
+        Trap::Exception(Exception::IllegalInstruction) => {
+            log::error!(
+                "Illegal instruction: {:?} (stval: {:#x}, sepc: {:#x})",
+                scause.cause(),
+                stval,
+                sepc
+            );
+            Resume::Fault
+        }
         _ => {
             log::error!(
                 "Unhandled exception: {:?} (stval: {:#x}, sepc: {:#x})",
@@ -100,6 +110,10 @@ pub fn handle_interrupt(_thread: &mut Thread) -> Resume {
             // thread has used up its time slice. Also disable the timer
             // to avoid getting another interrupt while handling this one.
             timer::shutdown();
+            Resume::Yield
+        }
+        Trap::Interrupt(Interrupt::SupervisorExternal) => {
+            log::warn!("External interrupt");
             Resume::Yield
         }
         _ => {

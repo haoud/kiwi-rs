@@ -11,6 +11,7 @@ use crate::{
 };
 use bitflags::bitflags;
 use core::ops::{Index, IndexMut};
+use usize_cast::IntoUsize;
 
 /// The kernel's page table. This table is used by the kernel to identity
 /// map the physical memory of the system, allowing the kernel to easily
@@ -337,7 +338,7 @@ impl Entry {
         // SAFETY: This is safe because the table entry cannot physically
         // contains an invalid physical address (not enough bits to have
         // an address greater than [`Physical::MAX`])
-        unsafe { Physical::new_unchecked((self.0 as usize & !0x3FF) << 2) }
+        unsafe { Physical::new_unchecked((self.0.into_usize() & !0x3FF) << 2) }
     }
 
     /// Check if the entry is a leaf entry, meaning that it points to a
@@ -363,6 +364,12 @@ impl Entry {
     ///
     /// If the address is not valid or points to another object, the behavior
     /// is undefined and may lead to memory corruption or data loss.
+    ///
+    /// # Panics
+    /// Panics if the physical address in the table cannot be translated to a
+    /// virtual address. This should not happens even in the SV39 paging mode,
+    /// as this would require a machine with more than 128 GiB of RAM, which
+    /// is not supported by Kiwi.
     #[must_use]
     pub unsafe fn next_table_mut(&self) -> Option<&mut Table> {
         if self.is_leaf() || !self.present() {
@@ -460,6 +467,17 @@ pub fn setup() {
 }
 
 /// Map a physical address to a virtual address.
+///
+/// # Errors
+/// This function will return an error if any of the following conditions
+/// are met:
+/// - The virtual address is already mapped to a physical address.
+/// - An intermediate table is missing and the kernel is unable to
+///   allocate a new table.
+///
+/// # Panics
+/// Panics if an error occurs while traversing the page table. This should
+/// never happen, as the page table should be properly initialized.
 pub fn map<T: addr::virt::Type>(
     root: &mut Table,
     virt: Virtual<T>,
@@ -509,6 +527,14 @@ pub fn map<T: addr::virt::Type>(
 
 /// Unmap a virtual address, returning the physical address that was previously
 /// mapped to it.
+///
+/// # Errors
+/// This function will return an error if the virtual address is not mapped to
+/// a physical address.
+///
+/// # Panics
+/// Panics if an error occurs while traversing the page table. This should
+/// never happen, as the page table should be properly initialized.
 pub fn unmap<T: addr::virt::Type>(
     root: &mut Table,
     virt: Virtual<T>,
@@ -565,6 +591,7 @@ pub fn translate_physical(
 /// # Panics
 /// Panics if the virtual address is not located in the kernel's address space,
 /// i.e. if it is not greater than or equal to `KERNEL_START`.
+#[must_use]
 pub fn translate_virtual_kernel(virt: Virtual<Kernel>) -> Physical {
     if virt.as_usize() >= KERNEL_VIRTUAL_BASE.as_usize() {
         Physical::new(
@@ -583,6 +610,7 @@ pub fn translate_virtual_kernel(virt: Virtual<Kernel>) -> Physical {
 /// # Panics
 /// Panics if the pointer is not located in the kernel's address space,
 /// i.e. if it is not greater than or equal to `KERNEL_VIRTUAL_BASE`.
+#[must_use]
 pub fn translate_kernel_ptr<T>(ptr: *const T) -> Physical {
     translate_virtual_kernel(Virtual::<Kernel>::new(ptr as usize))
 }

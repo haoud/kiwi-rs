@@ -4,6 +4,7 @@ use crate::arch::{
     target::addr::{Frame4Kib, Physical},
 };
 use bitflags::bitflags;
+use core::num::NonZeroUsize;
 use seqlock::Seqlock;
 
 /// Informations about a frame.
@@ -61,6 +62,11 @@ static RAM_END: Seqlock<usize> = Seqlock::new(0);
 static BITMAP: spin::Once<spin::Mutex<&mut [FrameInfo]>> = spin::Once::new();
 
 /// Initialize the physical memory manager
+///
+/// # Panics
+/// Panics if the bitmap cannot be allocated, meaning that there is not
+/// enough memory to store the bitmap. This can only happen on very constrained
+/// systems.
 #[inline]
 pub fn setup(mut memory: arch::memory::UsableMemory) {
     let frame_count = memory.ram_size().page_count_up();
@@ -85,7 +91,7 @@ pub fn setup(mut memory: arch::memory::UsableMemory) {
         for i in 0..frame_count {
             ptr.add(i).write(FrameInfo {
                 flags: FrameFlags::KERNEL,
-            })
+            });
         }
 
         // Create the slice
@@ -119,7 +125,7 @@ pub fn setup(mut memory: arch::memory::UsableMemory) {
 
     // Reserve the memory used by the firmware (OpenSBI)
     // TODO: Make this architecture agnostic
-    (0x80000000..0x80200000).for_each(|addr| {
+    (0x8000_0000..0x8020_0000).for_each(|addr| {
         bitmap[phys2index(addr)].flags &= !FrameFlags::KERNEL;
         bitmap[phys2index(addr)].flags |= FrameFlags::FIRMWARE;
     });
@@ -132,16 +138,21 @@ pub fn setup(mut memory: arch::memory::UsableMemory) {
 /// frame was successfully allocated.
 #[must_use]
 pub fn allocate_frame(flags: AllocationFlags) -> Option<Frame4Kib> {
-    allocate_range(1, flags).map(Frame4Kib::new)
+    const ONE: NonZeroUsize = const { NonZeroUsize::new(1).unwrap() };
+    allocate_range(ONE, flags).map(Frame4Kib::new)
 }
 
 /// Allocate a contiguous range of frames. Returns `None` if no contiguous
 /// range of frames is available. This does not mean that there are no free
 /// frames, but simply that there are no contiguous free frames (e.g. due to
 /// fragmentation).
+///
+/// # Panics
+/// Panics if the bitmap is not initialized (meaning that the physical memory
+/// manager is not initialized).
 #[must_use]
 pub fn allocate_range(
-    count: usize,
+    count: NonZeroUsize,
     flags: AllocationFlags,
 ) -> Option<Physical> {
     let mut bitmap = BITMAP
@@ -150,7 +161,7 @@ pub fn allocate_range(
         .lock();
 
     // Find the first range of contiguous free frames
-    let start = bitmap.windows(count).position(|frames| {
+    let start = bitmap.windows(count.get()).position(|frames| {
         frames
             .iter()
             .all(|info| info.flags.contains(FrameFlags::FREE))
@@ -158,7 +169,7 @@ pub fn allocate_range(
 
     // Mark the frames as used and add the kernel flags to
     // frames if requested
-    for frame in start..start + count {
+    for frame in start..start + count.get() {
         bitmap[frame].flags.remove(FrameFlags::FREE);
         if flags.contains(AllocationFlags::KERNEL) {
             bitmap[frame].flags |= FrameFlags::KERNEL;
@@ -174,7 +185,7 @@ pub fn allocate_range(
         // SAFETY: Zeroing the frame is safe since it isn't used
         // by anything else and will not cause undefined behavior
         unsafe {
-            core::ptr::write_bytes(ptr, 0, PAGE_SIZE * count);
+            core::ptr::write_bytes(ptr, 0, PAGE_SIZE * count.get());
         }
     }
 
@@ -192,7 +203,8 @@ pub fn deallocate_frame(frame: Physical) {
     deallocate_range(frame, 1);
 }
 
-/// Deallocate a contiguous range of frames starting at the given base address
+/// Deallocate a contiguous range of frames starting at the given base address.
+/// If the count parameter is 0, this function does nothing.
 ///
 /// # Panics
 /// Panics if at least one of the following conditions is met:
@@ -228,6 +240,10 @@ pub fn total_memory_pages() -> usize {
 /// Return the number of memory pages that are used by the kernel and are
 /// not available for allocation, including reserved memory by the firmware
 /// or the hardware
+///
+/// # Panics
+/// Panics if the bitmap is not initialized (meaning that the physical memory
+/// manager is not initialized)
 #[must_use]
 pub fn kernel_memory_pages() -> usize {
     BITMAP
@@ -239,7 +255,11 @@ pub fn kernel_memory_pages() -> usize {
         .count()
 }
 
-/// Convert a frame index to a frame address
+/// Convert a frame index to a frame address.
+///
+/// # Note
+/// This function simply converts a frame index to a physical address. It does
+/// NOT check if the frame is valid or if it exists in the system memory.
 ///
 /// # Panics
 /// Panics if the resulting physical address would be invalid (greater than

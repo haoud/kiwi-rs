@@ -1,5 +1,4 @@
 //! TODO:
-//!     - Clippy lints
 //!     - Async:
 //!         * Multi purpose executor (can execute user and kernel task)
 //!         * Proper user task quantum management
@@ -7,8 +6,14 @@
 //!         * Use a bitfield to track the memory usage
 //!         * Use a starting address to avoid reserved memory to take a huge
 //!         * part of the bitmap
+//!     - Addresses comparaison, iterators and step trait
+//!     - `zerocopy` and `bytemck` crate for safer code
 #![no_std]
 #![no_main]
+#![warn(clippy::all)]
+#![warn(clippy::pedantic)]
+#![allow(clippy::module_name_repetitions)]
+#![feature(const_option)]
 #![feature(panic_info_message)]
 
 pub mod arch;
@@ -37,7 +42,7 @@ static INIT: &[u8] = include_bytes!(
 /// be wiped from memory to free up memory space.
 #[macros::init]
 #[no_mangle]
-pub fn kiwi(memory: arch::memory::UsableMemory) -> ! {
+pub extern "Rust" fn kiwi(memory: arch::memory::UsableMemory) -> ! {
     pmm::setup(memory);
     heap::setup();
     future::executor::setup();

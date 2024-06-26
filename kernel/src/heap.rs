@@ -1,4 +1,5 @@
 use crate::{arch, pmm};
+use core::num::NonZeroUsize;
 
 /// The global heap allocator. This allocator is used to allocate
 /// memory on the kernel heap. However, the kernel heap should only
@@ -24,6 +25,13 @@ impl OomHandler {
     /// memory that could lead to an fatal OOM, even if there
     /// is enough memory available (but not contiguous).
     const ALLOCATION_SIZE: usize = 128 * 1024;
+
+    /// The number of frames that will be allocated when handling
+    /// an OOM. Directly related to the `ALLOCATION_SIZE` constant.
+    const ALLOCATION_FRAMES_COUNT: NonZeroUsize = const {
+        NonZeroUsize::new(Self::ALLOCATION_SIZE / arch::mmu::PAGE_SIZE)
+            .expect("Invalid allocation size")
+    };
 }
 
 impl talc::OomHandler for OomHandler {
@@ -47,10 +55,13 @@ impl talc::OomHandler for OomHandler {
             Self::ALLOCATION_SIZE
         );
 
-        // Allocate 128KiB of contiguous physical memory
-        let count = Self::ALLOCATION_SIZE >> arch::mmu::PAGE_SHIFT;
-        let base = pmm::allocate_range(count, pmm::AllocationFlags::KERNEL)
-            .ok_or(())?;
+        // Allocate a range of contiguous physical memory frames to
+        // satisfy the allocation request.
+        let base = pmm::allocate_range(
+            Self::ALLOCATION_FRAMES_COUNT,
+            pmm::AllocationFlags::KERNEL,
+        )
+        .ok_or(())?;
 
         // Convert the physical address to a virtual address and
         // compute the start and end pointers of the allocation.

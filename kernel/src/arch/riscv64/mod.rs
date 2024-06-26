@@ -14,6 +14,16 @@ pub mod trap;
 mod lang;
 
 /// Setup the riscv64 architecture
+///
+/// # Safety
+/// This function is unsafe because this function should only be called once
+/// and during the boot process. During this time, we must assume some
+/// invariants that we cannot guarantee in safe code.
+///
+/// # Panics
+/// This function panics if the device tree is invalid or if the memory
+/// regions are invalid.
+#[must_use]
 #[init]
 pub fn setup(hart: usize, device_tree: *const u8) -> UsableMemory {
     #[cfg(feature = "logging")]

@@ -20,7 +20,7 @@ static EXECUTOR: spin::Once<Executor> = spin::Once::new();
 /// # A cooperative scheduler for user-space tasks ?
 /// You may wonder why we use a cooperative scheduler instead of a preemptive
 /// scheduler for user-space tasks. This hasn't been done seriously since the
-/// early MacOS versions that demonstrated that cooperative multitasking for
+/// early `MacOS` versions that demonstrated that cooperative multitasking for
 /// user tasks is not a good idea for a stable and modern operating system.
 ///
 /// However, in our case, even if we use a cooperative executor, the user-space
@@ -59,15 +59,21 @@ impl Executor<'_> {
     }
 
     /// Run the next task that is ready to run.
+    ///
+    /// # Panics
+    /// Panics if this function encounters a duplicated task identifier. This
+    /// should never happen because the task identifier is unique and encoded
+    /// into a u64 that can handle up to 2^64 - 1 tasks and cannot be
+    /// overflowed in a reasonable time.
     pub fn run_once(&self) {
         // Get the next task to run.
         if let Some(id) = self.ready.pop() {
             // If the task is not found in the map, this means that the
             // task has completed and was removed from the map. Therefore,
             // we can safely ignore it.
-            let mut task = match self.tasks.lock().remove(&id) {
-                Some(task) => task,
-                None => return,
+            let Some(mut task) = self.tasks.lock().remove(&id) else {
+                log::trace!("Task {:?} already completed", usize::from(id));
+                return;
             };
 
             match task.poll() {
@@ -81,9 +87,7 @@ impl Executor<'_> {
                     // put it back in the map for the next run. The task
                     // identifier will be added to the ready queue by the
                     // task's waker when the task will be ready to run again.
-                    if self.tasks.lock().insert(id, task).is_some() {
-                        panic!("Duplicated task identifier");
-                    }
+                    assert!(self.tasks.lock().insert(id, task).is_none());
                 }
             }
         }
@@ -109,6 +113,9 @@ pub fn setup() {
 }
 
 /// Spawn a new future into the executor.
+///
+/// # Panics
+/// Panics if the executor is not initialized (i.e. `setup` was not called).
 pub fn spawn(thread: arch::thread::Thread) {
     let executor = EXECUTOR.get().expect("Executor not initialized");
     let task = Task::new(executor, Box::pin(thread_loop(thread)));
@@ -118,9 +125,7 @@ pub fn spawn(thread: arch::thread::Thread) {
     // exists in the map, this means that the task identifier is duplicated.
     // This should never happen because the task identifier is unique, and
     // is a serious bug that must be fixed.
-    if executor.tasks.lock().insert(id, task).is_some() {
-        panic!("Duplicated task identifier");
-    }
+    assert!(executor.tasks.lock().insert(id, task).is_none());
     executor.ready.push(id).expect("Ready queue full");
     log::trace!("Task {:?} spawned", usize::from(id));
 }
@@ -128,6 +133,9 @@ pub fn spawn(thread: arch::thread::Thread) {
 /// Run the executor forever. If there are no tasks ready to run, the
 /// executor will put the current core to a low-power state until a task
 /// is ready to run.
+///
+/// # Panics
+/// Panics if the executor is not initialized (i.e. `setup` was not called).
 pub fn run() -> ! {
     let executor = EXECUTOR.get().expect("Executor not initialized");
 

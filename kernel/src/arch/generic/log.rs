@@ -33,6 +33,10 @@ impl core::fmt::Write for Logger {
 
 /// Setup the logging subsystem. All log submitted to the logging subsystem
 /// will be ignored until this function is called.
+///
+/// # Panics
+/// This function will panic if the logging system is already initialized,
+/// meaning that this function was called more than once.
 #[cfg(feature = "logging")]
 pub fn setup() {
     log::set_max_level(log::LevelFilter::Info);

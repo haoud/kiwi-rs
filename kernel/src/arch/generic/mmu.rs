@@ -4,6 +4,7 @@ use crate::arch::target::{
     mmu::Table,
 };
 use bitflags::bitflags;
+use usize_cast::IntoUsize;
 
 pub trait Align {
     /// Assume that the value is a address and return the address aligned to
@@ -51,11 +52,11 @@ impl Align for usize {
 
 impl Align for u64 {
     fn page_count_down(&self) -> usize {
-        (self / PAGE_SIZE as u64) as usize
+        self.into_usize() / PAGE_SIZE
     }
 
     fn page_count_up(&self) -> usize {
-        ((self + PAGE_SIZE as u64 - 1) / PAGE_SIZE as u64) as usize
+        (self.into_usize() + PAGE_SIZE - 1) / PAGE_SIZE
     }
 
     fn page_align_down(&self) -> Self {
@@ -133,6 +134,10 @@ pub enum UnmapError {
 /// access it. The given rights and flags will be enforced by the Memory
 /// Management Unit (MMU) of the system, and the physical address will be
 /// translated to the virtual address when accessed by the kernel or the user.
+///
+/// # Errors
+/// For an exhaustive list of errors that can happen when trying to map a
+/// physical address to a virtual address, see the [`MapError`] enum.
 pub fn map<T: addr::virt::Type>(
     table: &mut Table,
     virt: Virtual<T>,
@@ -143,9 +148,13 @@ pub fn map<T: addr::virt::Type>(
     crate::arch::target::mmu::map(table, virt, frame, rights, flags)
 }
 
-/// Unmap a virtual address, returning the physical address that was previously
-/// mapped to it. If the virtual address was not mapped to any physical address,
-/// this function will return an error.
+/// Unmap a virtual address, returning the physical address that was
+/// previously mapped to it. If the virtual address was not mapped to
+/// any physical address, this function will return an error.
+///
+/// # Errors
+/// For an exhaustive list of errors that can happen when trying to unmap a
+/// virtual address, see the [`UnmapError`] enum.
 pub fn unmap<T: addr::virt::Type>(
     table: &mut Table,
     virt: Virtual<T>,

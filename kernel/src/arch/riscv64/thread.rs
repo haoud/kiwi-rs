@@ -70,6 +70,7 @@ impl Drop for Thread {
 /// Create a new thread with the given instruction pointer and stack pointer.
 /// This will create a thread with a default context and an empty user page
 /// table (but still containing the kernel mappings).
+#[must_use]
 pub fn create(ip: usize, stack: usize) -> Thread {
     let mut thread = Thread::new();
     thread.table.setup_from_kernel_space();

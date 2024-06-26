@@ -104,6 +104,10 @@ impl UsableMemory {
     /// update the region list to reflect the allocation and will return a
     /// pointer to the allocated **physical** page. The page is guaranteed to
     /// be zeroed.
+    ///
+    /// # Panics
+    /// Panics if the given page cannot be zeroed because the physical address
+    /// is not directly mapped to a virtual address.
     #[must_use]
     pub fn allocate_zeroed_page(&mut self) -> Option<Frame4Kib> {
         let frame = self.allocate_page()?;
@@ -138,8 +142,7 @@ impl UsableMemory {
             .iter()
             .max_by_key(|region| region.start + region.length)
             .map(|region| Physical::new(region.start + region.length))
-            .map(|addr| addr.page_align_down())
-            .unwrap_or(Physical::zero())
+            .map_or(Physical::zero(), |addr| addr.page_align_down())
     }
 
     /// Convert the usable memory into a list of free memory regions.

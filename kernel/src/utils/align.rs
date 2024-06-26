@@ -1,4 +1,5 @@
 use core::ops::Deref;
+use usize_cast::IntoUsize;
 
 /// A trait to verify that an object is aligned
 pub trait IsAligned {
@@ -12,6 +13,7 @@ pub trait IsAligned {
 /// This structure does not guarantees that the inner value will be aligned
 /// to the specified alignement in memory ! It only guarantees that the value
 /// itself is aligned to the given alignement
+#[derive(Clone)]
 pub struct Aligned<T: IsAligned, const N: usize>(T);
 
 impl<T: IsAligned, const N: usize> Aligned<T, N> {
@@ -59,12 +61,6 @@ impl<T: IsAligned, const N: usize> Aligned<T, N> {
 
 impl<T: IsAligned + Copy + Clone, const N: usize> Copy for Aligned<T, N> {}
 
-impl<T: IsAligned + Clone, const N: usize> Clone for Aligned<T, N> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
-    }
-}
-
 impl<T: IsAligned, const N: usize> Deref for Aligned<T, N> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
@@ -92,7 +88,7 @@ impl IsAligned for u32 {
 
 impl IsAligned for u64 {
     fn is_aligned(&self, align: usize) -> bool {
-        (*self as usize & (align - 1)) == 0
+        ((*self).into_usize() & (align - 1)) == 0
     }
 }
 

@@ -2,6 +2,7 @@ use crate::{arch::mmu, utils::align::IsAligned};
 use core::ops::{
     Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign,
 };
+use usize_cast::IntoUsize;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
@@ -126,6 +127,7 @@ impl Physical {
 
     /// Align the address down to the nearest page boundary. If the address is
     /// already page aligned, then it is returned as is.
+    #[must_use]
     pub const fn page_align_down(&self) -> Self {
         Self(self.0 & !(mmu::PAGE_SIZE - 1))
     }
@@ -136,6 +138,7 @@ impl Physical {
     /// # Panics
     /// This function will panic if the resulting address is greater than the
     /// maximum physical address (as defined by [`MAX`]).
+    #[must_use]
     pub const fn page_align_up(&self) -> Self {
         Self::new((self.0 + mmu::PAGE_SIZE - 1) & !(mmu::PAGE_SIZE - 1))
     }
@@ -165,7 +168,7 @@ impl TryFrom<u64> for Physical {
     type Error = ();
 
     fn try_from(addr: u64) -> Result<Self, Self::Error> {
-        Self::try_new(addr as usize).ok_or(())
+        Self::try_new(addr.into_usize()).ok_or(())
     }
 }
 
@@ -201,7 +204,7 @@ impl Add<u64> for Physical {
     type Output = Self;
 
     fn add(self, rhs: u64) -> Self::Output {
-        Self::new(self.0 + rhs as usize)
+        Self::new(self.0 + rhs.into_usize())
     }
 }
 
@@ -225,7 +228,7 @@ impl Sub<u64> for Physical {
     type Output = Self;
 
     fn sub(self, rhs: u64) -> Self::Output {
-        Self::new(self.0 - rhs as usize)
+        Self::new(self.0 - rhs.into_usize())
     }
 }
 
@@ -277,7 +280,7 @@ impl Mul<u64> for Physical {
     type Output = Self;
 
     fn mul(self, rhs: u64) -> Self::Output {
-        Self::new(self.0 * rhs as usize)
+        Self::new(self.0 * rhs.into_usize())
     }
 }
 
@@ -293,7 +296,7 @@ impl Div<u64> for Physical {
     type Output = Self;
 
     fn div(self, rhs: u64) -> Self::Output {
-        Self::new(self.0 / rhs as usize)
+        Self::new(self.0 / rhs.into_usize())
     }
 }
 
