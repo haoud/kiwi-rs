@@ -1,4 +1,4 @@
-use crate::{arch, pmm};
+use crate::{arch, mm};
 use core::num::NonZeroUsize;
 
 /// The global heap allocator. This allocator is used to allocate
@@ -57,9 +57,10 @@ impl talc::OomHandler for OomHandler {
 
         // Allocate a range of contiguous physical memory frames to
         // satisfy the allocation request.
-        let base = pmm::allocate_range(
+        let base = mm::phys::allocate_range(
             Self::ALLOCATION_FRAMES_COUNT,
-            pmm::AllocationFlags::ZEROED | pmm::AllocationFlags::KERNEL,
+            mm::phys::AllocationFlags::ZEROED
+                | mm::phys::AllocationFlags::KERNEL,
         )
         .ok_or(())?;
 

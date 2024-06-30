@@ -7,7 +7,7 @@ use super::addr::{
 };
 use crate::{
     arch::mmu::{Flags, MapError, Rights, UnmapError},
-    pmm::{self, AllocationFlags},
+    mm::{self, phys::AllocationFlags},
 };
 use bitflags::bitflags;
 use core::ops::{Index, IndexMut};
@@ -499,9 +499,10 @@ pub fn map<T: addr::virt::Type>(
         if !entry.present() {
             // Allocate a new zeroed frame with the kernel flag set and
             // create a new leaf entry.
-            let flags = AllocationFlags::KERNEL | AllocationFlags::ZEROED;
-            let frame =
-                pmm::allocate_frame(flags).ok_or(MapError::OutOfMemory)?;
+            let frame = mm::phys::allocate_frame(
+                AllocationFlags::KERNEL | AllocationFlags::ZEROED,
+            )
+            .ok_or(MapError::OutOfMemory)?;
 
             entry.clear();
             entry.set_address(frame);

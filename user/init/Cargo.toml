@@ -3,4 +3,8 @@ name = "init"
 version = "0.1.0"
 edition = "2021"
 
-[dependencies]
+[profile.release]
+codegen-units = 1
+opt-level = "z"
+strip = true
+lto = true

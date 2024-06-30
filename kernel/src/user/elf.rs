@@ -3,7 +3,7 @@ use crate::{
         self,
         target::addr::{virt::User, Virtual},
     },
-    pmm,
+    mm::{self, phys::AllocationFlags},
 };
 use usize_cast::IntoUsize;
 
@@ -65,7 +65,7 @@ pub fn load(file: &[u8]) -> arch::thread::Thread {
             );
             let addr = Virtual::<User>::new(page);
 
-            let frame = pmm::allocate_frame(pmm::AllocationFlags::ZEROED)
+            let frame = mm::phys::allocate_frame(AllocationFlags::ZEROED)
                 .expect("Failed to allocate zeroed page");
 
             // Map the page into the thread's page table

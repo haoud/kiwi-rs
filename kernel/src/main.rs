@@ -2,11 +2,6 @@
 //!     - Async:
 //!         * Multi purpose executor (can execute user and kernel task)
 //!         * Proper user task quantum management
-//!     - Reduce memory usage for the physical memory management
-//!         * Use a bitfield to track the memory usage
-//!         * Use a starting address to avoid reserved memory to take a huge
-//!         * part of the bitmap
-//!     - Addresses comparaison, iterators and step trait
 #![no_std]
 #![no_main]
 #![warn(clippy::all)]
@@ -17,10 +12,9 @@
 #![feature(panic_info_message)]
 
 pub mod arch;
-pub mod elf;
 pub mod future;
-pub mod heap;
-pub mod pmm;
+pub mod mm;
+pub mod user;
 pub mod utils;
 
 extern crate alloc;
@@ -43,12 +37,12 @@ static INIT: &[u8] = include_bytes!(
 #[macros::init]
 #[no_mangle]
 pub extern "Rust" fn kiwi(memory: arch::memory::UsableMemory) -> ! {
-    pmm::setup(memory);
-    heap::setup();
+    mm::phys::setup(memory);
+    mm::heap::setup();
     future::executor::setup();
-    future::executor::spawn(elf::load(INIT));
+    future::executor::spawn(user::elf::load(INIT));
 
-    let memory_usage = pmm::kernel_memory_pages() * 4;
+    let memory_usage = mm::phys::kernel_memory_pages() * 4;
     log::info!("Boot completed !");
     log::info!("Memory used by the kernel: {} Kib", memory_usage);
 
