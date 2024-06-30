@@ -1,11 +1,17 @@
 #![no_std]
 #![no_main]
+#![warn(clippy::all)]
+#![warn(clippy::pedantic)]
+#![allow(clippy::module_name_repetitions)]
+#![feature(step_trait)]
+#![feature(const_option)]
+#![feature(panic_info_message)]
 
-pub mod elf;
+pub mod arch;
 pub mod future;
-pub mod heap;
-pub mod pmm;
-pub mod process;
+pub mod mm;
+pub mod user;
+pub mod utils;
 
 extern crate alloc;
 
@@ -26,13 +32,13 @@ static INIT: &[u8] = include_bytes!(
 /// be wiped from memory to free up memory space.
 #[macros::init]
 #[no_mangle]
-pub fn kiwi(memory: arch::memory::UsableMemory) -> ! {
-    pmm::setup(memory);
-    heap::setup();
+pub extern "Rust" fn kiwi(memory: arch::memory::UsableMemory) -> ! {
+    mm::phys::setup(memory);
+    mm::heap::setup();
     future::executor::setup();
-    future::executor::spawn(elf::load(INIT));
+    future::executor::spawn(user::elf::load(INIT));
 
-    let memory_usage = pmm::kernel_memory_pages() * 4;
+    let memory_usage = mm::phys::kernel_memory_pages() * 4;
     log::info!("Boot completed !");
     log::info!("Memory used by the kernel: {} Kib", memory_usage);
 

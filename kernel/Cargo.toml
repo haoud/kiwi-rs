@@ -7,34 +7,54 @@ edition = "2021"
 intrusive-collections = { version = "0.9.6", default-features = false }
 crossbeam = { version = "0.8.4", default-features = false, features = ["alloc"] }
 futures = { version = "0.3.30", default-features = false, features = ["alloc"] }
-elf = { version = "0.7.4", default-features = false }
+elf = { version = "0.7.4", default-features = false}
+usize_cast = { workspace = true }
+heapless = { workspace = true }
 bitflags = { workspace = true }
+zerocopy = { workspace = true }
 seqlock = { workspace = true }
 config = { workspace = true }
 macros = { workspace = true }
 spin = { workspace = true }
-arch = { path = "arch" }
+log = { workspace = true }
 talc = "4.4.1"
-log = "0.4.21"
+
+[target.'cfg(target_arch = "riscv64")'.dependencies]
+riscv = { version = "0.11.1", features = ["s-mode"] }
+fdt = "0.1.5"
+sbi = "0.2.0"
 
 [features]
 default = ["logging"]
-logging = ["arch/logging"]
+logging = []
 
 [workspace]
-members = ["arch", "crates/config", "crates/macros", "crates/seqlock"]
+members = [
+    "crates/config",
+    "crates/macros",
+    "crates/seqlock",
+]
 
 [workspace.dependencies]
+zerocopy = { version = "0.7.34", features = ["alloc", "derive"] }
 seqlock = { path = "crates/seqlock" }
 config = { path = "crates/config" }
 macros = { path = "crates/macros" }
+usize_cast = "1.1.0"
 bitflags = "2.5.0"
 heapless = "0.8.0"
 colored = "2.1.0"
 spin = "0.9.8"
 log = "0.4.21"
 
+[workspace.lints.rust]
+undocumented_unsafe_blocks = "warn"
+if_then_some_else_none = "warn"
+pedantic = "warn"
+all = "warn"
+
 [profile.release]
 codegen-units = 1
-opt-level = "s"
+opt-level = 3
+strip = true
 lto = true

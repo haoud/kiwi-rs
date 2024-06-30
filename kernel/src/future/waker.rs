@@ -4,18 +4,15 @@ use crossbeam::queue::ArrayQueue;
 
 static WAKER_VTABLE: RawWakerVTable = RawWakerVTable::new(
     // Clone
-    |data| unsafe {
-        let waker = &*(data as *const Waker);
-        RawWaker::new(waker as *const _ as *const (), &WAKER_VTABLE)
-    },
+    |data| RawWaker::new(data.cast::<()>(), &WAKER_VTABLE),
     // Wake
     |data| unsafe {
-        let waker = &*(data as *const Waker);
+        let waker = &*(data.cast::<Waker>());
         waker.queue.push(waker.id).expect("Queue is full");
     },
     // Wake by ref
     |data| unsafe {
-        let waker = &*(data as *const Waker);
+        let waker = &*(data.cast::<Waker>());
         waker.queue.push(waker.id).expect("Queue is full");
     },
     // Drop
@@ -51,6 +48,6 @@ impl<'a> Waker<'a> {
     /// mutable references to the waker while the raw waker is in use.
     #[must_use]
     pub(super) unsafe fn raw(&self) -> RawWaker {
-        RawWaker::new(self as *const _ as *const (), &WAKER_VTABLE)
+        RawWaker::new(core::ptr::from_ref(self).cast::<()>(), &WAKER_VTABLE)
     }
 }
