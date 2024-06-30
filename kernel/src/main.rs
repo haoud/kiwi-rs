@@ -1,7 +1,3 @@
-//! TODO:
-//!     - Async:
-//!         * Multi purpose executor (can execute user and kernel task)
-//!         * Proper user task quantum management
 #![no_std]
 #![no_main]
 #![warn(clippy::all)]

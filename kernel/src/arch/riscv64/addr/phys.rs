@@ -1,15 +1,25 @@
 use crate::{arch::mmu, utils::align::IsAligned};
 use core::{
     iter::Step,
-    ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign},
+    ops::{Add, AddAssign, Sub, SubAssign},
 };
 use usize_cast::IntoUsize;
 
+use super::{Frame1Gib, Frame2Mib, Frame4Kib};
+
+/// A physical address in the RISC-V architecture. A physical address is a
+/// direct mapping to the physical memory of the system (RAM, ROM, etc). Since
+/// Kiwi always uses Sv39 paging, the physical address cannot directly be used
+/// to access memory. Instead, it must be translated to a virtual address with7
+/// the help of the MMU.
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 pub struct Physical(usize);
 
 impl Physical {
+    /// A physical address of 0.
+    pub const ZERO: Self = Self(0);
+
     /// The maximum physical address that can be represented on a RISC-V
     /// system. This does not necessarily mean that all of this address space
     /// is available for use but rather the size of the memory bus. Therefore,
@@ -155,6 +165,30 @@ impl Physical {
     pub const fn frame_idx(&self) -> usize {
         self.0 / mmu::PAGE_SIZE
     }
+
+    /// Convert the physical address to a 4KiB frame. If the address is not
+    /// aligned to a 4KiB frame, the address will be truncated to the nearest
+    /// lower 4KiB frame.
+    #[must_use]
+    pub fn into_4kib_frame_truncate(self) -> Frame4Kib {
+        Frame4Kib::new(Physical::new(self.0 / Frame4Kib::SIZE))
+    }
+
+    /// Convert the physical address to a 2MiB frame. If the address is not
+    /// aligned to a 2MiB frame, the address will be truncated to the nearest
+    /// lower 2MiB frame.
+    #[must_use]
+    pub fn into_2mib_frame_truncate(self) -> Frame2Mib {
+        Frame2Mib::new(Physical::new(self.0 / Frame2Mib::SIZE))
+    }
+
+    /// Convert the physical address to a 1GiB frame. If the address is not
+    /// aligned to a 1GiB frame, the address will be truncated to the nearest
+    /// lower 1GiB frame.
+    #[must_use]
+    pub fn into_1gib_frame_truncate(self) -> Frame1Gib {
+        Frame1Gib::new(Physical::new(self.0 / Frame1Gib::SIZE))
+    }
 }
 
 impl TryFrom<usize> for Physical {
@@ -269,63 +303,10 @@ impl SubAssign<u64> for Physical {
     }
 }
 
-impl Mul<usize> for Physical {
-    type Output = Self;
-
-    fn mul(self, rhs: usize) -> Self::Output {
-        Self::new(self.0 * rhs)
-    }
-}
-
-impl Mul<u64> for Physical {
-    type Output = Self;
-
-    fn mul(self, rhs: u64) -> Self::Output {
-        Self::new(self.0 * rhs.into_usize())
-    }
-}
-
-impl Div<usize> for Physical {
-    type Output = Self;
-
-    fn div(self, rhs: usize) -> Self::Output {
-        Self::new(self.0 / rhs)
-    }
-}
-
-impl Div<u64> for Physical {
-    type Output = Self;
-
-    fn div(self, rhs: u64) -> Self::Output {
-        Self::new(self.0 / rhs.into_usize())
-    }
-}
-
-impl MulAssign<usize> for Physical {
-    fn mul_assign(&mut self, rhs: usize) {
-        *self = *self * rhs;
-    }
-}
-
-impl MulAssign<u64> for Physical {
-    fn mul_assign(&mut self, rhs: u64) {
-        *self = *self * rhs;
-    }
-}
-
-impl DivAssign<usize> for Physical {
-    fn div_assign(&mut self, rhs: usize) {
-        *self = *self / rhs;
-    }
-}
-
-impl DivAssign<u64> for Physical {
-    fn div_assign(&mut self, rhs: u64) {
-        *self = *self / rhs;
-    }
-}
-
 impl IsAligned for Physical {
+    /// Check if the physical address is aligned to the given alignment. The
+    /// given alignment must be a power of two, otherwise the result will be
+    /// incorrect.
     fn is_aligned(&self, align: usize) -> bool {
         self.is_aligned_to(align)
     }

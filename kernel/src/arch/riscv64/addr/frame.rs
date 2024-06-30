@@ -50,7 +50,7 @@ impl Step for Frame4Kib {
         if end >= start {
             let start = usize::from(start.into_inner());
             let end = usize::from(end.into_inner());
-            Some((end - start) / 4096)
+            Some((end - start) / Self::SIZE)
         } else {
             None
         }
@@ -61,7 +61,7 @@ impl Step for Frame4Kib {
     /// physical address or overflows, `None` is returned.
     fn forward_checked(start: Self, count: usize) -> Option<Self> {
         usize::from(start.into_inner())
-            .checked_add(count.checked_mul(4096)?)
+            .checked_add(count.checked_mul(Self::SIZE)?)
             .and_then(Physical::try_new)
             .map(Frame4Kib::new)
     }
@@ -71,7 +71,7 @@ impl Step for Frame4Kib {
     /// physical address or underflows, `None` is returned.
     fn backward_checked(start: Self, count: usize) -> Option<Self> {
         usize::from(start.into_inner())
-            .checked_sub(count.checked_mul(4096)?)
+            .checked_sub(count.checked_mul(Self::SIZE)?)
             .and_then(Physical::try_new)
             .map(Frame4Kib::new)
     }
@@ -116,7 +116,7 @@ impl Step for Frame2Mib {
         if end >= start {
             let start = usize::from(start.into_inner());
             let end = usize::from(end.into_inner());
-            Some((end - start) / 4096 * 512)
+            Some((end - start) / Self::SIZE)
         } else {
             None
         }
@@ -127,7 +127,7 @@ impl Step for Frame2Mib {
     /// valid physical address or overflows, `None` is returned.
     fn forward_checked(start: Self, count: usize) -> Option<Self> {
         usize::from(start.into_inner())
-            .checked_add(count.checked_mul(4096 * 512)?)
+            .checked_add(count.checked_mul(Self::SIZE)?)
             .and_then(Physical::try_new)
             .map(Frame2Mib::new)
     }
@@ -137,7 +137,7 @@ impl Step for Frame2Mib {
     /// valid physical address or underflows, `None` is returned.
     fn backward_checked(start: Self, count: usize) -> Option<Self> {
         usize::from(start.into_inner())
-            .checked_sub(count.checked_mul(4096 * 512)?)
+            .checked_sub(count.checked_mul(Self::SIZE)?)
             .and_then(Physical::try_new)
             .map(Frame2Mib::new)
     }
@@ -182,7 +182,7 @@ impl Step for Frame1Gib {
         if end >= start {
             let start = usize::from(start.into_inner());
             let end = usize::from(end.into_inner());
-            Some((end - start) / 4096 * 512 * 512)
+            Some((end - start) / Self::SIZE)
         } else {
             None
         }
@@ -193,7 +193,7 @@ impl Step for Frame1Gib {
     /// is not a valid physical address or overflows, `None` is returned.
     fn forward_checked(start: Self, count: usize) -> Option<Self> {
         usize::from(start.into_inner())
-            .checked_add(count.checked_mul(4096 * 512 * 512)?)
+            .checked_add(count.checked_mul(Self::SIZE)?)
             .and_then(Physical::try_new)
             .map(Frame1Gib::new)
     }
@@ -203,7 +203,7 @@ impl Step for Frame1Gib {
     /// not a valid physical address or underflows, `None` is returned.
     fn backward_checked(start: Self, count: usize) -> Option<Self> {
         usize::from(start.into_inner())
-            .checked_sub(count.checked_mul(4096 * 512 * 512)?)
+            .checked_sub(count.checked_mul(Self::SIZE)?)
             .and_then(Physical::try_new)
             .map(Frame1Gib::new)
     }

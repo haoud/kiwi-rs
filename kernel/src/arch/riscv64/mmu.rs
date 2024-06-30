@@ -101,7 +101,7 @@ impl Table {
     /// the current page table, and must ensure that the table will remain
     /// in memory while it is set as the current page table.
     pub unsafe fn set_current(&self) {
-        let ppn = translate_kernel_ptr(self).as_usize() >> 12;
+        let ppn = translate_kernel_ptr(self).as_usize() >> PAGE_SHIFT;
         riscv::register::satp::set(riscv::register::satp::Mode::Sv39, 0, ppn);
         riscv::asm::sfence_vma_all();
     }
