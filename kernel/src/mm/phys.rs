@@ -153,10 +153,7 @@ pub fn allocate_frame(flags: AllocationFlags) -> Option<Frame4Kib> {
 /// Panics if the bitmap is not initialized (meaning that the physical memory
 /// manager is not initialized).
 #[must_use]
-pub fn allocate_range(
-    count: NonZeroUsize,
-    flags: AllocationFlags,
-) -> Option<Physical> {
+pub fn allocate_range(count: NonZeroUsize, flags: AllocationFlags) -> Option<Physical> {
     let mut bitmap = BITMAP
         .get()
         .expect("Physical memory bitmap not initialized")

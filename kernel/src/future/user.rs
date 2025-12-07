@@ -26,7 +26,7 @@ pub async fn thread_loop(mut thread: arch::thread::Thread) {
         // sohuld be reset to the full value.
         match resume {
             Resume::Terminate(code) => break Exit::Terminate(code),
-            Resume::Continue => continue,
+            Resume::Continue => (),
             Resume::Yield => yield_once().await,
             Resume::Fault => break Exit::Fault,
         }

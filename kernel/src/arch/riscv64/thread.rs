@@ -5,7 +5,7 @@ use riscv::register::scause::{self, Exception};
 
 core::arch::global_asm!(include_str!("asm/thread.asm"));
 
-extern "C" {
+unsafe extern "C" {
     fn thread_execute(context: &mut trap::Context);
 }
 

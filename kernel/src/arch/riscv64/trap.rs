@@ -7,7 +7,7 @@ use riscv::register::{
 
 core::arch::global_asm!(include_str!("asm/trap.asm"));
 
-extern "C" {
+unsafe extern "C" {
     fn kernel_enter();
 }
 
@@ -105,10 +105,10 @@ pub fn handle_interrupt(_thread: &mut Thread) -> Resume {
     let scause = riscv::register::scause::read();
     match scause.cause() {
         Trap::Interrupt(Interrupt::SupervisorTimer) => {
-            // The timer interrupt is used to preempt the currently
-            // running thread and switch to the next one if the current
-            // thread has used up its time slice. Also disable the timer
-            // to avoid getting another interrupt while handling this one.
+            // The timer interrupt is used to preempt the currently running
+            // thread and switch to the next one if the current thread has
+            // used up its time slice. Also disable the timer to avoid getting
+            // another interrupt while handling this one.
             timer::shutdown();
             Resume::Yield
         }
@@ -123,7 +123,7 @@ pub fn handle_interrupt(_thread: &mut Thread) -> Resume {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn kernel_trap_handler() {
     unimplemented!("Kernel trap handler");
 }

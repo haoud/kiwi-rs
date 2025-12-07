@@ -35,18 +35,12 @@ impl OomHandler {
 }
 
 impl talc::OomHandler for OomHandler {
-    fn handle_oom(
-        talc: &mut talc::Talc<Self>,
-        layout: core::alloc::Layout,
-    ) -> Result<(), ()> {
+    fn handle_oom(talc: &mut talc::Talc<Self>, layout: core::alloc::Layout) -> Result<(), ()> {
         // The heap should not be used to allocate large chunks of
         // memory. Since kiwi is designed to be a microkernel, this
         // should never happen.
         if layout.size() > Self::ALLOCATION_SIZE {
-            log::error!(
-                "Allocation request too large: {} bytes",
-                layout.size()
-            );
+            log::error!("Allocation request too large: {} bytes", layout.size());
             return Err(());
         }
 
@@ -59,8 +53,7 @@ impl talc::OomHandler for OomHandler {
         // satisfy the allocation request.
         let base = mm::phys::allocate_range(
             Self::ALLOCATION_FRAMES_COUNT,
-            mm::phys::AllocationFlags::ZEROED
-                | mm::phys::AllocationFlags::KERNEL,
+            mm::phys::AllocationFlags::ZEROED | mm::phys::AllocationFlags::KERNEL,
         )
         .ok_or(())?;
 

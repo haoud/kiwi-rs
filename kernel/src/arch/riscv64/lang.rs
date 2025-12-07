@@ -2,7 +2,7 @@ use macros::init;
 
 core::arch::global_asm!(include_str!("asm/boot.asm"));
 
-extern "C" {
+unsafe extern "C" {
     static __bss_start: [u8; 0];
     static __bss_end: [u8; 0];
 }
@@ -32,7 +32,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 /// and then call the `kiwi` function which is the main function of the kernel
 /// that will properly start the kernel and never return.
 #[init]
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn entry(hart: usize, device_tree: usize) -> ! {
     // Setup the architecture-specific stuff and start the kernel
     crate::kiwi(super::setup(hart, device_tree as *const u8));

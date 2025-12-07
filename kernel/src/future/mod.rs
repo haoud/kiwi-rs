@@ -38,10 +38,7 @@ impl Future for YieldFuture {
     /// return `Poll::Ready(())`. Otherwise, it will return `Poll::Pending`,
     /// but wake up the waker before doing so. The next time the future is
     /// polled, it will return `Poll::Ready(())`.
-    fn poll(
-        self: Pin<&mut Self>,
-        context: &mut Context<'_>,
-    ) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Self::Output> {
         if self.polled {
             Poll::Ready(())
         } else {

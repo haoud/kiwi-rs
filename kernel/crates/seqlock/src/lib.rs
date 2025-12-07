@@ -114,11 +114,8 @@ impl<T: Copy> Seqlock<T> {
             // be concurrently modified by the writer.
             // SAFETY: Actually, the line below is UB ^^'... But works in
             // practice, and is widely used in the linux kernel.
-            let data = unsafe {
-                core::ptr::read_volatile::<MaybeUninit<T>>(
-                    self.data.get().cast(),
-                )
-            };
+            let data =
+                unsafe { core::ptr::read_volatile::<MaybeUninit<T>>(self.data.get().cast()) };
 
             // Make sure that the second read of the sequence number happens
             // after the read of the data. Ideally, we would use `Release`

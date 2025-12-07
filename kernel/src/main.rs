@@ -2,10 +2,8 @@
 #![no_main]
 #![warn(clippy::all)]
 #![warn(clippy::pedantic)]
+#![allow(unsafe_op_in_unsafe_fn)]
 #![allow(clippy::module_name_repetitions)]
-#![feature(step_trait)]
-#![feature(const_option)]
-#![feature(panic_info_message)]
 
 pub mod arch;
 pub mod future;
@@ -18,9 +16,8 @@ extern crate alloc;
 /// The initial user-space process that will be executed by the kernel. This
 /// is the only user-space process that is started directly by the kernel.
 /// All other user-space processes must be started by the `init` process.
-static INIT: &[u8] = include_bytes!(
-    "../../user/init/target/riscv64gc-unknown-none-elf/release/init"
-);
+static INIT: &[u8] =
+    include_bytes!("../../user/init/target/riscv64gc-unknown-none-elf/release/init");
 
 /// The `kiwi` function is called after the architecture-specific
 /// initialization was completed. It is responsible for setting up the
@@ -31,7 +28,7 @@ static INIT: &[u8] = include_bytes!(
 /// process. Once the boot process is completed, the function will
 /// be wiped from memory to free up memory space.
 #[macros::init]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "Rust" fn kiwi(memory: arch::memory::UsableMemory) -> ! {
     mm::phys::setup(memory);
     mm::heap::setup();

@@ -1,6 +1,6 @@
 pub use crate::arch::target::mmu::{PAGE_SHIFT, PAGE_SIZE};
 use crate::arch::target::{
-    addr::{self, virt::Kernel, Frame4Kib, Physical, Virtual},
+    addr::{self, Frame4Kib, Physical, Virtual, virt::Kernel},
     mmu::Table,
 };
 use bitflags::bitflags;
@@ -38,7 +38,7 @@ impl Align for usize {
     }
 
     fn page_count_up(&self) -> usize {
-        (self + PAGE_SIZE - 1) / PAGE_SIZE
+        self.div_ceil(PAGE_SIZE)
     }
 
     fn page_align_down(&self) -> Self {
@@ -56,7 +56,7 @@ impl Align for u64 {
     }
 
     fn page_count_up(&self) -> usize {
-        (self.into_usize() + PAGE_SIZE - 1) / PAGE_SIZE
+        self.into_usize().div_ceil(PAGE_SIZE)
     }
 
     fn page_align_down(&self) -> Self {
@@ -168,8 +168,6 @@ pub fn unmap<T: addr::virt::Type>(
 /// virtual address is too small. This should only happen on 32-bit systems
 /// with more than 4 GiB of RAM, which is not common.
 #[must_use]
-pub fn translate_physical(
-    phys: impl Into<Physical>,
-) -> Option<Virtual<Kernel>> {
+pub fn translate_physical(phys: impl Into<Physical>) -> Option<Virtual<Kernel>> {
     crate::arch::target::mmu::translate_physical(phys)
 }

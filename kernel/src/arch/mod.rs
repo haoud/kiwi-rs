@@ -10,7 +10,7 @@ pub use riscv64 as target;
 pub mod generic;
 pub use generic::*;
 
-extern "Rust" {
+unsafe extern "Rust" {
     /// The architecture-independent entry point for the kernel. This function
     /// should be called by the architecture-specific entry point after the
     /// architecture-specific initialization is complete.

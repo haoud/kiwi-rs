@@ -1,5 +1,5 @@
 use proc_macro::TokenStream;
-use syn::{parse_macro_input, ItemFn};
+use syn::{ItemFn, parse_macro_input};
 
 /// A macro to indicate that a function is only used during the initialization
 /// of the kernel. This macro will this attribute are put in a separate .init
@@ -14,7 +14,7 @@ use syn::{parse_macro_input, ItemFn};
 #[proc_macro_attribute]
 pub fn init(_: TokenStream, item: TokenStream) -> TokenStream {
     let mut input_fn = parse_macro_input!(item as ItemFn);
-    let link_section = syn::parse_quote!(#[link_section = ".init"]);
+    let link_section = syn::parse_quote!(#[unsafe(link_section = ".init")]);
 
     input_fn.sig.unsafety = Some(syn::parse_quote!(unsafe));
     input_fn.attrs.push(link_section);

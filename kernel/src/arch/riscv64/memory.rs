@@ -2,7 +2,7 @@ use super::mmu;
 use crate::arch::{generic::memory::UsableMemory, memory::Region};
 use heapless::Vec;
 
-extern "C" {
+unsafe extern "C" {
     static __reclaimable_start: [u8; 0];
     static __reclaimable_end: [u8; 0];
     static __start: [u8; 0];
@@ -23,22 +23,16 @@ impl UsableMemory {
         // Compute the kernel start and end addresses in physical memory, so
         // that we can skip the kernel memory region when adding the memory
         // regions to the usable memory to avoid overwriting ourselves :(
-        let kernel_physical_start = unsafe {
-            usize::from(mmu::translate_kernel_ptr(core::ptr::addr_of!(__start)))
-        };
-        let kernel_physical_end = unsafe {
-            usize::from(mmu::translate_kernel_ptr(core::ptr::addr_of!(__end)))
-        };
-        let kernel_reclaimable_start = unsafe {
-            usize::from(mmu::translate_kernel_ptr(core::ptr::addr_of!(
-                __reclaimable_start
-            )))
-        };
-        let kernel_reclaimable_end = unsafe {
-            usize::from(mmu::translate_kernel_ptr(core::ptr::addr_of!(
-                __reclaimable_end
-            )))
-        };
+        let kernel_physical_start =
+            usize::from(mmu::translate_kernel_ptr(core::ptr::addr_of!(__start)));
+        let kernel_physical_end =
+            usize::from(mmu::translate_kernel_ptr(core::ptr::addr_of!(__end)));
+        let kernel_reclaimable_start = usize::from(mmu::translate_kernel_ptr(core::ptr::addr_of!(
+            __reclaimable_start
+        )));
+        let kernel_reclaimable_end = usize::from(mmu::translate_kernel_ptr(core::ptr::addr_of!(
+            __reclaimable_end
+        )));
 
         let kernel_memory = kernel_physical_end - kernel_physical_start;
         let firmware_memory = 0x0020_0000;

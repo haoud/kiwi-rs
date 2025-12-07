@@ -28,7 +28,9 @@ impl KernelStack {
     /// Create a new kernel stack.
     #[must_use]
     pub const fn new() -> Self {
-        Self { stack: [0; 4096] }
+        Self {
+            stack: [0; config::KERNEL_STACK_SIZE],
+        }
     }
 
     /// Get the bottom of the stack.

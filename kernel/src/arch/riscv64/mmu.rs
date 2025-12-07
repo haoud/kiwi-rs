@@ -2,9 +2,7 @@
 //! implementation only handle SV39 paging, which should be supported by all
 //! RISC-V64 systems and should be enough for most use cases. However, it is
 //! possible to add support for other paging modes in the future.
-use super::addr::{
-    self, virt::Kernel, Frame1Gib, Frame4Kib, Physical, Virtual,
-};
+use super::addr::{self, Frame1Gib, Frame4Kib, Physical, Virtual, virt::Kernel};
 use crate::{
     arch::mmu::{Flags, MapError, Rights, UnmapError},
     mm::{self, phys::AllocationFlags},
@@ -23,8 +21,7 @@ static KERNEL_TABLE: spin::Mutex<Table> = spin::Mutex::new(Table::empty());
 /// 1 GiB of physical memory in the last 1 GiB of virtual memory should be
 /// enough and have the nice side effect of making the kernel's address space
 /// independent of the pagination mode used by the processor (SV39, SV48, etc).
-pub const KERNEL_VIRTUAL_BASE: Virtual<Kernel> =
-    Virtual::<Kernel>::new(0xFFFF_FFFF_C000_0000);
+pub const KERNEL_VIRTUAL_BASE: Virtual<Kernel> = Virtual::<Kernel>::new(0xFFFF_FFFF_C000_0000);
 
 /// The physical address where the RAM starts. This address will be mapped
 /// to the kernel's address space at the address defined by
@@ -35,8 +32,7 @@ pub const KERNEL_PHYSICAL_BASE: Frame1Gib =
 /// The start of ther kernel's address space. This corresponds to the first
 /// address after the 'canonical hole' in the virtual address space and goes
 /// up to the last address of the virtual address space.
-pub const KERNEL_START: Virtual<Kernel> =
-    Virtual::<Kernel>::new(0xFFFF_FFC0_0000_0000);
+pub const KERNEL_START: Virtual<Kernel> = Virtual::<Kernel>::new(0xFFFF_FFC0_0000_0000);
 
 /// The size of a page in bytes.
 pub const PAGE_SIZE: usize = 4096;
@@ -371,7 +367,7 @@ impl Entry {
     /// as this would require a machine with more than 128 GiB of RAM, which
     /// is not supported by Kiwi.
     #[must_use]
-    pub unsafe fn next_table_mut(&self) -> Option<&mut Table> {
+    pub unsafe fn next_table_mut(&mut self) -> Option<&mut Table> {
         if self.is_leaf() || !self.present() {
             None
         } else {
@@ -428,12 +424,8 @@ bitflags! {
 pub fn setup() {
     log::info!("Initializing the MMU and remapping the kernel");
     log::debug!("Using SV39 paging mode (3 levels of page tables)");
-    log::debug!(
-        "User address space :   0x0000000000000000 - 0x00007FFFFFFFFFFF"
-    );
-    log::debug!(
-        "Kernel address space : 0xFFFFFFFFC0000000 - 0xFFFFFFFFFFFFFFFF"
-    );
+    log::debug!("User address space :   0x0000000000000000 - 0x00007FFFFFFFFFFF");
+    log::debug!("Kernel address space : 0xFFFFFFFFC0000000 - 0xFFFFFFFFFFFFFFFF");
     let mut table = KERNEL_TABLE.lock();
 
     // Map the first 255 GiB of physical memory to the first 255 GiB
@@ -442,9 +434,7 @@ pub fn setup() {
     // to manually map each page.
     for i in 256..511 {
         let entry = &mut table[i];
-        entry.set_address(Frame1Gib::new(Physical::new(
-            (i - 256) * 0x4000_0000,
-        )));
+        entry.set_address(Frame1Gib::new(Physical::new((i - 256) * 0x4000_0000)));
         entry.set_executable(true);
         entry.set_writable(true);
         entry.set_readable(true);
@@ -499,10 +489,8 @@ pub fn map<T: addr::virt::Type>(
         if !entry.present() {
             // Allocate a new zeroed frame with the kernel flag set and
             // create a new leaf entry.
-            let frame = mm::phys::allocate_frame(
-                AllocationFlags::KERNEL | AllocationFlags::ZEROED,
-            )
-            .ok_or(MapError::OutOfMemory)?;
+            let frame = mm::phys::allocate_frame(AllocationFlags::KERNEL | AllocationFlags::ZEROED)
+                .ok_or(MapError::OutOfMemory)?;
 
             entry.clear();
             entry.set_address(frame);
@@ -578,9 +566,7 @@ pub fn unmap<T: addr::virt::Type>(
 /// virtual address representable by the system, this function will return
 /// `None`.
 #[must_use]
-pub fn translate_physical(
-    phys: impl Into<Physical>,
-) -> Option<Virtual<Kernel>> {
+pub fn translate_physical(phys: impl Into<Physical>) -> Option<Virtual<Kernel>> {
     Some(Virtual::<Kernel>::new(
         usize::from(KERNEL_START) + usize::from(phys.into()),
     ))
@@ -596,8 +582,7 @@ pub fn translate_physical(
 pub fn translate_virtual_kernel(virt: Virtual<Kernel>) -> Physical {
     if virt >= KERNEL_VIRTUAL_BASE {
         Physical::new(
-            usize::from(virt) - usize::from(KERNEL_VIRTUAL_BASE)
-                + KERNEL_PHYSICAL_BASE.as_usize(),
+            usize::from(virt) - usize::from(KERNEL_VIRTUAL_BASE) + KERNEL_PHYSICAL_BASE.as_usize(),
         )
     } else {
         Physical::new(usize::from(virt) - usize::from(KERNEL_START))

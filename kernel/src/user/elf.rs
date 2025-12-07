@@ -21,9 +21,8 @@ use usize_cast::IntoUsize;
 #[must_use]
 #[macros::init]
 pub fn load(file: &[u8]) -> arch::thread::Thread {
-    let header =
-        elf::ElfBytes::<elf::endian::LittleEndian>::minimal_parse(file)
-            .expect("Failed to parse ELF file");
+    let header = elf::ElfBytes::<elf::endian::LittleEndian>::minimal_parse(file)
+        .expect("Failed to parse ELF file");
 
     let mut thread = arch::thread::create(header.ehdr.e_entry.into_usize(), 0);
     for segment in header
@@ -53,16 +52,10 @@ pub fn load(file: &[u8]) -> arch::thread::Thread {
         // start address of the segment is not page aligned, the first page
         // will be partially filled with data from the ELF file and the rest
         // of the page will handled normally.
-        for page in (segment_aligned_mem_start..segment_mem_end)
-            .step_by(arch::mmu::PAGE_SIZE)
-        {
+        for page in (segment_aligned_mem_start..segment_mem_end).step_by(arch::mmu::PAGE_SIZE) {
             let section_offset = page + misalign - segment_mem_start;
             let file_offset = segment.p_offset.into_usize() + section_offset;
-            log::trace!(
-                "Mapping page 0x{:x} with offset 0x{:x}",
-                page,
-                file_offset
-            );
+            log::trace!("Mapping page 0x{:x} with offset 0x{:x}", page, file_offset);
             let addr = Virtual::<User>::new(page);
 
             let frame = mm::phys::allocate_frame(AllocationFlags::ZEROED)
@@ -81,8 +74,7 @@ pub fn load(file: &[u8]) -> arch::thread::Thread {
             // Compute the size of the data to copy into the physical
             // page and compute the source and destination pointers
             let remaning = segment_file_size.saturating_sub(section_offset);
-            let size =
-                core::cmp::min(arch::mmu::PAGE_SIZE - misalign, remaning);
+            let size = core::cmp::min(arch::mmu::PAGE_SIZE - misalign, remaning);
             let src = file.as_ptr().wrapping_add(file_offset);
             let dst = arch::mmu::translate_physical(frame)
                 .expect("Failed to translate physical address")

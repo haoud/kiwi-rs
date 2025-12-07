@@ -55,11 +55,7 @@ impl UsableMemory {
     /// the region list to reflect the allocation and will return a physical
     /// address that can be used to store the object.
     #[must_use]
-    pub fn allocate_memory<T>(
-        &mut self,
-        length: usize,
-        align: usize,
-    ) -> Option<Physical> {
+    pub fn allocate_memory<T>(&mut self, length: usize, align: usize) -> Option<Physical> {
         // Verify that the alignment given is at least the minimum alignment
         // required for the type T.
         if align < core::mem::align_of::<T>() {

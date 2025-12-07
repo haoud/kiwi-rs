@@ -1,5 +1,5 @@
 use crate::{arch::mmu, utils::align::IsAligned};
-use core::{iter::Step, marker::PhantomData};
+use core::marker::PhantomData;
 
 /// The type of a virtual address. It can be either a kernel or user address.
 pub trait Type: Copy {}
@@ -83,7 +83,7 @@ impl<T: Type> Virtual<T> {
     /// Check if the address is page aligned.
     #[must_use]
     pub const fn is_page_aligned(&self) -> bool {
-        self.0 % mmu::PAGE_SIZE == 0
+        self.0.is_multiple_of(mmu::PAGE_SIZE)
     }
 }
 
@@ -119,26 +119,6 @@ impl Virtual<User> {
         } else {
             None
         }
-    }
-}
-
-impl Step for Virtual<User> {
-    /// The number of steps between two user virtual addresses is simply the
-    /// difference between the two addresses.
-    fn steps_between(start: &Self, end: &Self) -> Option<usize> {
-        if end >= start {
-            Some(end.0 - start.0)
-        } else {
-            None
-        }
-    }
-
-    fn forward_checked(start: Self, count: usize) -> Option<Self> {
-        Self::try_new(start.0 + count)
-    }
-
-    fn backward_checked(start: Self, count: usize) -> Option<Self> {
-        Self::try_new(start.0 - count)
     }
 }
 
@@ -213,31 +193,5 @@ impl<T: Type> From<Virtual<T>> for u64 {
 impl<T: Type> IsAligned for Virtual<T> {
     fn is_aligned(&self, align: usize) -> bool {
         (self.0 & (align - 1)) == 0
-    }
-}
-
-impl Step for Virtual<Kernel> {
-    /// The number of steps between two kernel virtual addresses is
-    /// simply the difference between the two addresses.
-    fn steps_between(start: &Self, end: &Self) -> Option<usize> {
-        if end >= start {
-            Some(end.0 - start.0)
-        } else {
-            None
-        }
-    }
-
-    /// Advances the virtual address by `count` bytes. If the resulting
-    /// address is not in the kernel address space or overflows, then
-    /// `None` is returned.
-    fn forward_checked(start: Self, count: usize) -> Option<Self> {
-        Self::try_new(start.0.checked_add(count)?)
-    }
-
-    /// Retreats the virtual address by `count` bytes. If the resulting
-    /// address is not in the kernel address space or underflows, then
-    /// `None` is returned.
-    fn backward_checked(start: Self, count: usize) -> Option<Self> {
-        Self::try_new(start.0.checked_sub(count)?)
     }
 }

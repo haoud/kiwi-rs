@@ -1,6 +1,5 @@
 use super::{PageAligned, Physical};
 use crate::utils::align::Aligned;
-use core::iter::Step;
 
 /// A frame of memory. On riscv64, this can be a 4Kib, 2Mib, or 1Gib frame,
 /// assuming a Sv39 paging scheme. Greater frame sizes may be available with
@@ -43,40 +42,6 @@ impl From<Frame4Kib> for Physical {
     }
 }
 
-impl Step for Frame4Kib {
-    /// Computes the distance between two frames. This is the number of 4Kib
-    /// frames between the two frames.
-    fn steps_between(start: &Self, end: &Self) -> Option<usize> {
-        if end >= start {
-            let start = usize::from(start.into_inner());
-            let end = usize::from(end.into_inner());
-            Some((end - start) / Self::SIZE)
-        } else {
-            None
-        }
-    }
-
-    /// Advances the frame by `count` frames. This is the same as adding
-    /// `count * 4096` to the frame's address. If the result is not a valid
-    /// physical address or overflows, `None` is returned.
-    fn forward_checked(start: Self, count: usize) -> Option<Self> {
-        usize::from(start.into_inner())
-            .checked_add(count.checked_mul(Self::SIZE)?)
-            .and_then(Physical::try_new)
-            .map(Frame4Kib::new)
-    }
-
-    /// Retreats the frame by `count` frames. This is the same as subtracting
-    /// `count * 4096` from the frame's address. If the result is not a valid
-    /// physical address or underflows, `None` is returned.
-    fn backward_checked(start: Self, count: usize) -> Option<Self> {
-        usize::from(start.into_inner())
-            .checked_sub(count.checked_mul(Self::SIZE)?)
-            .and_then(Physical::try_new)
-            .map(Frame4Kib::new)
-    }
-}
-
 /// A 2Mib frame
 pub type Frame2Mib = Aligned<Physical, { 4096 * 512 }>;
 
@@ -109,40 +74,6 @@ impl From<Frame2Mib> for Physical {
     }
 }
 
-impl Step for Frame2Mib {
-    /// Computes the distance between two frames. This is the number of 2Mib
-    /// frames between the two frames.
-    fn steps_between(start: &Self, end: &Self) -> Option<usize> {
-        if end >= start {
-            let start = usize::from(start.into_inner());
-            let end = usize::from(end.into_inner());
-            Some((end - start) / Self::SIZE)
-        } else {
-            None
-        }
-    }
-
-    /// Advances the frame by `count` frames. This is the same as adding
-    /// `count * 4096 * 512` to the frame's address. If the result is not a
-    /// valid physical address or overflows, `None` is returned.
-    fn forward_checked(start: Self, count: usize) -> Option<Self> {
-        usize::from(start.into_inner())
-            .checked_add(count.checked_mul(Self::SIZE)?)
-            .and_then(Physical::try_new)
-            .map(Frame2Mib::new)
-    }
-
-    /// Retreats the frame by `count` frames. This is the same as subtracting
-    /// `count * 4096 * 512` from the frame's address. If the result is not a
-    /// valid physical address or underflows, `None` is returned.
-    fn backward_checked(start: Self, count: usize) -> Option<Self> {
-        usize::from(start.into_inner())
-            .checked_sub(count.checked_mul(Self::SIZE)?)
-            .and_then(Physical::try_new)
-            .map(Frame2Mib::new)
-    }
-}
-
 /// A 1 Gib frame
 pub type Frame1Gib = Aligned<Physical, { 4096 * 512 * 512 }>;
 
@@ -172,39 +103,5 @@ impl From<Frame2Mib> for Frame1Gib {
 impl From<Frame1Gib> for Physical {
     fn from(frame: Frame1Gib) -> Self {
         frame.into_inner()
-    }
-}
-
-impl Step for Frame1Gib {
-    /// Computes the distance between two frames. This is the number of 1 Gib
-    /// frames between the two frames.
-    fn steps_between(start: &Self, end: &Self) -> Option<usize> {
-        if end >= start {
-            let start = usize::from(start.into_inner());
-            let end = usize::from(end.into_inner());
-            Some((end - start) / Self::SIZE)
-        } else {
-            None
-        }
-    }
-
-    /// Advances the frame by `count` frames. This is the same as adding
-    /// `count * 4096 * 512 * 512` to the frame's address. If the result
-    /// is not a valid physical address or overflows, `None` is returned.
-    fn forward_checked(start: Self, count: usize) -> Option<Self> {
-        usize::from(start.into_inner())
-            .checked_add(count.checked_mul(Self::SIZE)?)
-            .and_then(Physical::try_new)
-            .map(Frame1Gib::new)
-    }
-
-    /// Retreats the frame by `count` frames. This is the same as subtracting
-    /// `count * 4096 * 512 * 512` from the frame's address. If the result is
-    /// not a valid physical address or underflows, `None` is returned.
-    fn backward_checked(start: Self, count: usize) -> Option<Self> {
-        usize::from(start.into_inner())
-            .checked_sub(count.checked_mul(Self::SIZE)?)
-            .and_then(Physical::try_new)
-            .map(Frame1Gib::new)
     }
 }

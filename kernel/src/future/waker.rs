@@ -33,10 +33,7 @@ pub struct Waker<'a> {
 impl<'a> Waker<'a> {
     /// Create a new waker.
     #[must_use]
-    pub const fn new(
-        queue: &'a ArrayQueue<task::Identifier>,
-        id: task::Identifier,
-    ) -> Self {
+    pub const fn new(queue: &'a ArrayQueue<task::Identifier>, id: task::Identifier) -> Self {
         Waker { queue, id }
     }
 

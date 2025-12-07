@@ -1,8 +1,5 @@
 use crate::{arch::mmu, utils::align::IsAligned};
-use core::{
-    iter::Step,
-    ops::{Add, AddAssign, Sub, SubAssign},
-};
+use core::ops::{Add, AddAssign, Sub, SubAssign};
 use usize_cast::IntoUsize;
 
 use super::{Frame1Gib, Frame2Mib, Frame4Kib};
@@ -120,6 +117,9 @@ impl Physical {
     /// must be a power of two, otherwise the result will be incorrect. If the
     /// physical address is already aligned to the given alignment, the address
     /// will not be changed.
+    ///
+    /// # Panics
+    /// Panic if the alignement is not a power of two.
     #[must_use]
     pub const fn align_up(self, align: usize) -> Self {
         assert!(align.is_power_of_two());
@@ -157,7 +157,7 @@ impl Physical {
     /// Check if the address is page aligned.
     #[must_use]
     pub const fn is_page_aligned(&self) -> bool {
-        self.0 % mmu::PAGE_SIZE == 0
+        self.0.is_multiple_of(mmu::PAGE_SIZE)
     }
 
     /// Convert the physical address to a frame index.
@@ -309,30 +309,5 @@ impl IsAligned for Physical {
     /// incorrect.
     fn is_aligned(&self, align: usize) -> bool {
         self.is_aligned_to(align)
-    }
-}
-
-impl Step for Physical {
-    /// The number of steps between two physical addresses is simply
-    /// the difference between the two addresses value !
-    fn steps_between(start: &Self, end: &Self) -> Option<usize> {
-        if end.0 >= start.0 {
-            Some(end.0 - start.0)
-        } else {
-            None
-        }
-    }
-
-    /// Advances the physical address by `count` bytes. If the address
-    /// overflows or is greater than the maximum physical address, then
-    /// `None` is returned.
-    fn forward_checked(start: Self, count: usize) -> Option<Self> {
-        Self::try_new(start.0.checked_add(count)?)
-    }
-
-    /// Retreats the physical address by `count` bytes. If the address
-    /// underflows, then `None` is returned.
-    fn backward_checked(start: Self, count: usize) -> Option<Self> {
-        Self::try_new(start.0.checked_sub(count)?)
     }
 }

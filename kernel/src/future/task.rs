@@ -51,7 +51,7 @@ impl<'a> Task<'a> {
 
     /// Returns the executor that owns the task.
     #[must_use]
-    pub const fn executor(&'a self) -> &'a Executor {
+    pub const fn executor(&'a self) -> &'a Executor<'a> {
         self.executor
     }
 

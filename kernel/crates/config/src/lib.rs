@@ -17,8 +17,9 @@ pub const MAX_TASKS: u16 = 32;
 ///
 /// Kiwi use a single stack per cpu, so the stack must be large enough to
 /// handle all the kernel operations, including nested interrupts and
-/// exceptions.
-pub const KERNEL_STACK_SIZE: usize = 4096;
+/// exceptions. A size of 16 KiB should be enough for most use cases, and do
+/// not waste too much memory since the stack is only allocated once per CPU.
+pub const KERNEL_STACK_SIZE: usize = 4096 * 4;
 
 /// The number of milliseconds that a thread can run before being preempted
 /// by the scheduler if it has not yielded the CPU. This value is used to
