@@ -1,7 +1,7 @@
 use crate::{
     arch::{
         self,
-        target::addr::{virt::User, Virtual},
+        target::addr::{Virtual, virt::User},
     },
     mm::{self, phys::AllocationFlags},
 };
@@ -24,7 +24,9 @@ pub fn load(file: &[u8]) -> arch::thread::Thread {
     let header = elf::ElfBytes::<elf::endian::LittleEndian>::minimal_parse(file)
         .expect("Failed to parse ELF file");
 
+    // TODO: Allocate and set up the user stack for the thread
     let mut thread = arch::thread::create(header.ehdr.e_entry.into_usize(), 0);
+
     for segment in header
         .segments()
         .unwrap()

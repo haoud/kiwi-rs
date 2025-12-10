@@ -35,7 +35,6 @@ pub fn setup(hart: usize, device_tree: *const u8) -> UsableMemory {
     // Parse the device tree using the `fdt` crate
     // SAFETY: We must assume that the device tree pointer is valid
     let fdt = unsafe { fdt::Fdt::from_ptr(device_tree).expect("Failed to parse the device tree") };
-
     let memory = UsableMemory::new(&fdt);
 
     mmu::setup();

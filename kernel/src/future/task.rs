@@ -62,23 +62,21 @@ impl<'a> Task<'a> {
     }
 }
 
+/// A unique identifier for a task.
 #[derive(Debug, Clone, Copy, Eq, PartialEq, PartialOrd, Ord, Hash)]
-pub struct Identifier {
-    id: usize,
-}
+pub struct Identifier(usize);
 
 impl Identifier {
-    /// Creates a new task identifier.
+    /// Creates a new task identifier. The identifier is guaranteed to be unique
+    /// across the entire kernel runtime.
     pub fn generate() -> Self {
         static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
-        Self {
-            id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
-        }
+        Self(NEXT_ID.fetch_add(1, Ordering::Relaxed))
     }
 }
 
 impl From<Identifier> for usize {
     fn from(id: Identifier) -> usize {
-        id.id
+        id.0
     }
 }

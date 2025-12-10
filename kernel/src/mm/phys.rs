@@ -4,7 +4,6 @@ use crate::arch::{
     target::addr::{Frame4Kib, Physical},
 };
 use bitflags::bitflags;
-use core::num::NonZeroUsize;
 use seqlock::Seqlock;
 
 /// Informations about a frame.
@@ -59,7 +58,7 @@ static RAM_END: Seqlock<usize> = Seqlock::new(0);
 /// The bitmap allocator is used to allocate and deallocate physical frames
 /// using a bitmap. This allocator is very slow, but does not consume a lot
 /// of memory and is "good enought" for now.
-static BITMAP: spin::Once<spin::Mutex<&mut [FrameInfo]>> = spin::Once::new();
+static BITMAP: spin::Mutex<&mut [FrameInfo]> = spin::Mutex::new(&mut []);
 
 /// Initialize the physical memory manager
 ///
@@ -133,34 +132,35 @@ pub fn setup(mut memory: arch::memory::UsableMemory) {
         });
 
     // Initialize the bitmap
-    BITMAP.call_once(|| spin::Mutex::new(bitmap));
+    *BITMAP.lock() = bitmap;
 }
 
 /// Allocate a frame. Returns `None` if no frame is available, or a frame if a
 /// frame was successfully allocated.
 #[must_use]
 pub fn allocate_frame(flags: AllocationFlags) -> Option<Frame4Kib> {
-    const ONE: NonZeroUsize = const { NonZeroUsize::new(1).unwrap() };
-    allocate_range(ONE, flags).map(Frame4Kib::new)
+    allocate_range(1, flags).map(Frame4Kib::new)
 }
 
 /// Allocate a contiguous range of frames. Returns `None` if no contiguous
 /// range of frames is available. This does not mean that there are no free
 /// frames, but simply that there are no contiguous free frames (e.g. due to
 /// fragmentation).
+/// If the count parameter is 0, this function returns `None`.
 ///
 /// # Panics
 /// Panics if the bitmap is not initialized (meaning that the physical memory
 /// manager is not initialized).
 #[must_use]
-pub fn allocate_range(count: NonZeroUsize, flags: AllocationFlags) -> Option<Physical> {
-    let mut bitmap = BITMAP
-        .get()
-        .expect("Physical memory bitmap not initialized")
-        .lock();
+pub fn allocate_range(count: usize, flags: AllocationFlags) -> Option<Physical> {
+    if count == 0 {
+        return None;
+    }
+
+    let mut bitmap = BITMAP.lock();
 
     // Find the first range of contiguous free frames
-    let start = bitmap.windows(count.get()).position(|frames| {
+    let start = bitmap.windows(count).position(|frames| {
         frames
             .iter()
             .all(|info| info.flags.contains(FrameFlags::FREE))
@@ -168,7 +168,7 @@ pub fn allocate_range(count: NonZeroUsize, flags: AllocationFlags) -> Option<Phy
 
     // Mark the frames as used and add the kernel flags to
     // frames if requested
-    for frame in start..start + count.get() {
+    for frame in start..start + count {
         bitmap[frame].flags.remove(FrameFlags::FREE);
         if flags.contains(AllocationFlags::KERNEL) {
             bitmap[frame].flags |= FrameFlags::KERNEL;
@@ -184,7 +184,7 @@ pub fn allocate_range(count: NonZeroUsize, flags: AllocationFlags) -> Option<Phy
         // SAFETY: Zeroing the frames is safe since it isn't used
         // by anything else and will not cause undefined behavior
         unsafe {
-            core::ptr::write_bytes(ptr, 0, PAGE_SIZE * count.get());
+            core::ptr::write_bytes(ptr, 0, PAGE_SIZE * count);
         }
     }
 
@@ -213,11 +213,7 @@ pub fn deallocate_frame(frame: Physical) {
 pub fn deallocate_range(base: Physical, count: usize) {
     let start = phys2index(usize::from(base));
     let end = start + count;
-
-    let mut bitmap = BITMAP
-        .get()
-        .expect("Physical memory bitmap not initialized")
-        .lock();
+    let mut bitmap = BITMAP.lock();
 
     assert!(base.is_page_aligned());
     assert!(start + count >= start);
@@ -246,8 +242,6 @@ pub fn total_memory_pages() -> usize {
 #[must_use]
 pub fn kernel_memory_pages() -> usize {
     BITMAP
-        .get()
-        .expect("Physical memory bitmap not initialized")
         .lock()
         .iter()
         .filter(|frame| frame.flags.contains(FrameFlags::KERNEL))

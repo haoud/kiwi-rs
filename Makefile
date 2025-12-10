@@ -7,6 +7,7 @@ build: build-user build-kernel
 build-kernel:
 	cd kernel && cargo build --release --target riscv64gc-unknown-none-elf
 
+# Build the userspace
 build-user:
 	cd user && make build
 

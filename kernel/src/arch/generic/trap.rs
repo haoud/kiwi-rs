@@ -26,6 +26,12 @@ pub struct KernelStack {
 
 impl KernelStack {
     /// Create a new kernel stack.
+    ///
+    /// # Usage
+    /// This function should only be used to create static instances of
+    /// `KernelStack`, like the `KERNEL_STACK` static variable defined
+    /// above. Calling this function at runtime will overflow the stack
+    /// since Rust does not support placement allocation !
     #[must_use]
     pub const fn new() -> Self {
         Self {

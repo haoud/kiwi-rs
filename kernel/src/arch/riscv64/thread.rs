@@ -62,7 +62,6 @@ impl Default for Thread {
 
 impl Drop for Thread {
     fn drop(&mut self) {
-        // FIXME: Free the page table
         log::trace!("Dropping thread");
     }
 }

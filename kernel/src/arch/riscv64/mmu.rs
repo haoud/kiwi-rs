@@ -16,11 +16,11 @@ use usize_cast::IntoUsize;
 /// access the physical memory of the system.
 static KERNEL_TABLE: spin::Mutex<Table> = spin::Mutex::new(Table::empty());
 
-/// The virtual address where the kernel address space starts. Since we are
-/// developing a micro-kernel, allowing the kernel to access only the first
-/// 1 GiB of physical memory in the last 1 GiB of virtual memory should be
-/// enough and have the nice side effect of making the kernel's address space
-/// independent of the pagination mode used by the processor (SV39, SV48, etc).
+/// The virtual address where the kernel base starts. The last 1 GiB of
+/// virtual memory is reserved for the kernel, and this address is where
+/// the kernel maps the first 1 GiB of physical memory. The rest of the
+/// physical memory is identity mapped in the kernel's address space to
+/// allow the kernel to access any physical address easily.
 pub const KERNEL_VIRTUAL_BASE: Virtual<Kernel> = Virtual::<Kernel>::new(0xFFFF_FFFF_C000_0000);
 
 /// The physical address where the RAM starts. This address will be mapped
@@ -62,11 +62,6 @@ impl Table {
     /// Create a new empty page table. An empty page table is a table where
     /// all entries are missing, meaning that they do not point to a physical
     /// address and are not present in the page table.
-    ///
-    /// # Warning
-    /// This function should only be used to initialize static variables !
-    /// Trying to create a new empty page table at runtime will result in a
-    /// stack overflow, as the stack is 4 KiB large by default.
     #[must_use]
     pub const fn empty() -> Self {
         Self([Entry::missing(); 512])
@@ -113,6 +108,14 @@ impl Index<usize> for Table {
 impl IndexMut<usize> for Table {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.0[index]
+    }
+}
+
+impl Drop for Table {
+    fn drop(&mut self) {
+        // TODO: Free all the tables and frames mapped by this table. This will require
+        // traversing the entire table and freeing all the frames and tables
+        // mapped by this table.
     }
 }
 

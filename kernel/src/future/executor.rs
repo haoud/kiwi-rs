@@ -58,7 +58,8 @@ impl Executor<'_> {
         !self.ready.is_empty()
     }
 
-    /// Run the next task that is ready to run.
+    /// Run the next task that is ready to run. If there are no tasks ready
+    /// to run, this function does nothing.
     ///
     /// # Panics
     /// Panics if this function encounters a duplicated task identifier. This

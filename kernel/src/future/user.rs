@@ -7,10 +7,15 @@ use core::time::Duration;
 /// Thread exit status
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Exit {
+    /// Normal termination with exit code
     Terminate(i32),
+
+    /// Termination due to a fault
     Fault,
 }
 
+/// The thread execution loop future. This future runs the given thread
+/// until it terminates, either normally or due to a fault.
 pub async fn thread_loop(mut thread: arch::thread::Thread) {
     let exit = loop {
         // Set the next timer event
@@ -22,8 +27,8 @@ pub async fn thread_loop(mut thread: arch::thread::Thread) {
             Trap::Syscall => Resume::Terminate(0),
         };
 
-        // TODO: Proper quantum management: if a thread yields, its quantum
-        // sohuld be reset to the full value.
+        // TODO: Proper quantum management: if a thread yields, it should not
+        // consume its entire quantum.
         match resume {
             Resume::Terminate(code) => break Exit::Terminate(code),
             Resume::Continue => (),

@@ -1,5 +1,4 @@
 use crate::{arch, mm};
-use core::num::NonZeroUsize;
 
 /// The global heap allocator. This allocator is used to allocate
 /// memory on the kernel heap. However, the kernel heap should only
@@ -28,10 +27,7 @@ impl OomHandler {
 
     /// The number of frames that will be allocated when handling
     /// an OOM. Directly related to the `ALLOCATION_SIZE` constant.
-    const ALLOCATION_FRAMES_COUNT: NonZeroUsize = const {
-        NonZeroUsize::new(Self::ALLOCATION_SIZE / arch::mmu::PAGE_SIZE)
-            .expect("Invalid allocation size")
-    };
+    const ALLOCATION_FRAMES_COUNT: usize = const { Self::ALLOCATION_SIZE / arch::mmu::PAGE_SIZE };
 }
 
 impl talc::OomHandler for OomHandler {

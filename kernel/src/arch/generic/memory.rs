@@ -30,27 +30,6 @@ pub struct UsableMemory {
 }
 
 impl UsableMemory {
-    /// Create a new usable memory structure with the given memory regions and
-    /// memory informations.
-    #[must_use]
-    fn setup(
-        regions: Vec<Region, 32>,
-        firmware_memory: usize,
-        kernel_memory: usize,
-        total_memory: usize,
-        ram_start: usize,
-        ram_end: usize,
-    ) -> Self {
-        Self {
-            regions,
-            firmware_memory,
-            kernel_memory,
-            total_memory,
-            ram_start,
-            ram_end,
-        }
-    }
-
     /// Allocate an object using the available memory regions. It will update
     /// the region list to reflect the allocation and will return a physical
     /// address that can be used to store the object.
