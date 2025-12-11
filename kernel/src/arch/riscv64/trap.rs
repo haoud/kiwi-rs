@@ -16,15 +16,15 @@ unsafe extern "C" {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[repr(C, align(16))]
 pub struct Context {
-    registers: [u64; 31],
-    sstatus: u64,
-    sepc: u64,
+    registers: [usize; 31],
+    sstatus: usize,
+    sepc: usize,
 
     /// Some padding to align the `Context` struct to 16 bytes. This
     /// is also used when executing a thread to temporarily store the
     /// kernel stack pointer into to be able to easily restore it when
     /// a trap occurs while executing the thread.
-    padding: u64,
+    padding: usize,
 }
 
 impl Context {
@@ -39,14 +39,27 @@ impl Context {
         }
     }
 
+    /// Get the value of the given register (x0 - x31).
+    ///
+    /// # Panics
+    /// Panics if the index is out of bounds.
+    #[must_use]
+    pub fn get_register(&self, index: usize) -> usize {
+        match index {
+            0 => 0,
+            1..=31 => self.registers[index - 1],
+            _ => panic!("Register index out of bounds: {}", index),
+        }
+    }
+
     /// Set the stack pointer.
     pub fn set_sp(&mut self, sp: usize) {
-        self.registers[1] = sp as u64;
+        self.registers[1] = sp;
     }
 
     /// Set the instruction pointer.
     pub fn set_ip(&mut self, ip: usize) {
-        self.sepc = ip as u64;
+        self.sepc = ip;
     }
 }
 

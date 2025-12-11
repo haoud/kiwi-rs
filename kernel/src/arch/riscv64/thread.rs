@@ -107,3 +107,24 @@ pub fn execute(thread: &mut Thread) -> Trap {
         scause::Trap::Interrupt(_) => Trap::Interrupt,
     }
 }
+
+/// Get the syscall identifier from the given thread. On RISC-V, the
+/// syscall identifier is stored in the a7 register (x17).
+#[must_use]
+pub fn get_syscall_id(thread: &Thread) -> usize {
+    thread.context.get_register(17)
+}
+
+/// Get the raw syscall arguments from the given thread. On RISC-V, the
+/// syscall arguments are stored in the a0-a5 registers (x10-x15).
+#[must_use]
+pub fn get_syscall_args(thread: &Thread) -> [usize; 6] {
+    [
+        thread.context.get_register(10),
+        thread.context.get_register(11),
+        thread.context.get_register(12),
+        thread.context.get_register(13),
+        thread.context.get_register(14),
+        thread.context.get_register(15),
+    ]
+}

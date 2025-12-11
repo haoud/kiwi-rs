@@ -1,6 +1,6 @@
 use super::yield_once;
-use crate::arch;
 use crate::arch::trap::{Resume, Trap};
+use crate::{arch, user};
 use config::THREAD_QUANTUM;
 use core::time::Duration;
 
@@ -24,7 +24,7 @@ pub async fn thread_loop(mut thread: arch::thread::Thread) {
         let resume = match trap {
             Trap::Exception => arch::trap::handle_exception(&mut thread),
             Trap::Interrupt => arch::trap::handle_interrupt(&mut thread),
-            Trap::Syscall => Resume::Terminate(0),
+            Trap::Syscall => user::syscall::handle_syscall(&mut thread),
         };
 
         // TODO: Proper quantum management: if a thread yields, it should not

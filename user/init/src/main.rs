@@ -4,8 +4,11 @@
 
 #[unsafe(no_mangle)]
 pub unsafe fn _start() -> ! {
-    core::arch::asm!("ecall");
-    loop {}
+    core::arch::asm!("ecall",
+      in("a7") 1,   // syscall number for exit
+      in("a0") 0,   // exit code 0
+      options(noreturn)
+    );
 }
 
 #[panic_handler]

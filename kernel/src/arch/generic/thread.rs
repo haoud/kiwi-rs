@@ -12,3 +12,15 @@ pub fn create(ip: usize, stack: usize) -> Thread {
 pub fn execute(thread: &mut Thread) -> Trap {
     crate::arch::target::thread::execute(thread)
 }
+
+/// Get the syscall identifier from the given thread.
+#[must_use]
+pub fn get_syscall_id(thread: &Thread) -> usize {
+    crate::arch::target::thread::get_syscall_id(thread)
+}
+
+/// Get the raw syscall arguments from the given thread.
+#[must_use]
+pub fn get_syscall_args(thread: &Thread) -> [usize; 6] {
+    crate::arch::target::thread::get_syscall_args(thread)
+}

@@ -92,13 +92,6 @@ pub enum Resume {
     Fault,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u32)]
-pub enum Syscall {
-    /// No operation syscall, used for testing purposes.
-    Nop = 0,
-}
-
 pub fn handle_exception(thread: &mut crate::arch::thread::Thread) -> Resume {
     crate::arch::target::trap::handle_exception(thread)
 }
