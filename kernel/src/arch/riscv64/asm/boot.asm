@@ -25,6 +25,14 @@ _start:
   or t0, t0, t1
   csrw satp, t0
 
+  # Clear the BSS section with zeros
+	LA_FAR t2, __bss_start
+  LA_FAR t3, __bss_end
+.bss_clear:
+	sd zero, (t2)
+	addi t2, t2, 8
+	bltu t2, t3, .bss_clear
+
   # Update the pointer in a1 to use the kernel virtual base
   la t0, KERNEL_PHYSICAL_BASE
   la t1, KERNEL_VIRTUAL_BASE
