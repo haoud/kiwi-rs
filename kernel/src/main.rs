@@ -29,7 +29,7 @@ static INIT: &[u8] =
 /// be wiped from memory to free up memory space.
 #[macros::init]
 #[unsafe(no_mangle)]
-pub extern "Rust" fn kiwi(memory: arch::memory::UsableMemory) -> ! {
+pub unsafe extern "Rust" fn kiwi(memory: arch::memory::UsableMemory) -> ! {
     mm::phys::setup(memory);
     mm::heap::setup();
     future::executor::setup();

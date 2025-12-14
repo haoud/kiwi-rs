@@ -25,7 +25,7 @@ mod lang;
 /// regions are invalid.
 #[must_use]
 #[init]
-pub fn setup(hart: usize, device_tree: *const u8) -> UsableMemory {
+pub unsafe fn setup(hart: usize, device_tree: *const u8) -> UsableMemory {
     #[cfg(feature = "logging")]
     generic::log::setup();
 
