@@ -20,7 +20,7 @@ use usize_cast::IntoUsize;
 /// space, offset overflow, etc.).
 #[must_use]
 #[macros::init]
-pub fn load(file: &[u8]) -> arch::thread::Thread {
+pub unsafe fn load(file: &[u8]) -> arch::thread::Thread {
     let header = elf::ElfBytes::<elf::endian::LittleEndian>::minimal_parse(file)
         .expect("Failed to parse ELF file");
 
@@ -65,7 +65,7 @@ pub fn load(file: &[u8]) -> arch::thread::Thread {
 
             // Map the page into the thread's page table
             arch::mmu::map(
-                thread.table_mut(),
+                thread.root_table_mut(),
                 addr,
                 frame,
                 arch::mmu::Rights::RWXU,

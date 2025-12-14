@@ -4,7 +4,7 @@ pub mod frame;
 pub mod phys;
 pub mod virt;
 
-pub use frame::{Frame1Gib, Frame2Mib, Frame4Kib};
+pub use frame::{Frame, Frame1Gib, Frame2Mib, Frame4Kib};
 pub use phys::Physical;
 pub use virt::Virtual;
 

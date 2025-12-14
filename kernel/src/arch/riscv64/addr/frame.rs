@@ -16,6 +16,14 @@ pub type Frame4Kib = PageAligned<Physical>;
 impl Frame4Kib {
     /// The size of a 4Kib frame in bytes.
     pub const SIZE: usize = 4096;
+
+    /// Create a 4Kib frame from its index. The index is calculated by
+    /// multiplying the index by the size of the frame (e.g., index 0 is at address
+    /// 0, index 1 is at address 4 KiB, etc.).
+    #[must_use]
+    pub fn from_index(index: usize) -> Self {
+        Self::new(Physical::new(index * Self::SIZE))
+    }
 }
 
 impl From<Physical> for Frame4Kib {
@@ -48,6 +56,14 @@ pub type Frame2Mib = Aligned<Physical, { 4096 * 512 }>;
 impl Frame2Mib {
     /// The size of a 2Mib frame in bytes.
     pub const SIZE: usize = 4096 * 512;
+
+    /// Create a 2Mib frame from its index. The index is calculated by
+    /// multiplying the index by the size of the frame (e.g., index 0 is at address
+    /// 0, index 1 is at address 2 MiB, etc.).
+    #[must_use]
+    pub fn from_index(index: usize) -> Self {
+        Self::new(Physical::new(index * Self::SIZE))
+    }
 }
 
 impl From<Physical> for Frame2Mib {
@@ -80,6 +96,14 @@ pub type Frame1Gib = Aligned<Physical, { 4096 * 512 * 512 }>;
 impl Frame1Gib {
     /// The size of a 1 Gib frame in bytes.
     pub const SIZE: usize = 4096 * 512 * 512;
+
+    /// Create a 1 Gib frame from its index. The index is calculated by
+    /// multiplying the index by the size of the frame (e.g., index 0 is at address
+    /// 0, index 1 is at address 1 GiB, etc.).
+    #[must_use]
+    pub fn from_index(index: usize) -> Self {
+        Self::new(Physical::new(index * Self::SIZE))
+    }
 }
 
 impl From<Physical> for Frame1Gib {

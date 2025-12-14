@@ -1,8 +1,7 @@
-use crate::arch::{
-    self,
-    target::addr::{Frame4Kib, Physical},
-};
+use crate::arch::{self};
 use heapless::Vec;
+
+pub use crate::arch::target::addr::{Frame, Frame1Gib, Frame2Mib, Frame4Kib, Physical};
 
 /// A structure representing the usable memory regions of the system. It is
 /// used to allocate memory for objects during the initialization of the kernel

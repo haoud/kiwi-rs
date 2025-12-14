@@ -73,6 +73,19 @@ impl<T: Type> Virtual<T> {
         self.0 == 0
     }
 
+    /// Get the virtual page number (VPN) for each level of the SV39 page table. VPN
+    /// are stored in an array where index 0 is the highest level (level 2) and index 2
+    /// is the lowest level (level 0). This allow to easily iterate over the levels when
+    /// walking the page table.
+    #[must_use]
+    pub const fn vpn_sv39(&self) -> [usize; 3] {
+        [
+            (self.0 >> 30) & 0x1FF,
+            (self.0 >> 21) & 0x1FF,
+            (self.0 >> 12) & 0x1FF,
+        ]
+    }
+
     /// Align the address down to the nearest page boundary. If the address is
     /// already page aligned, then it is returned as is.
     #[must_use]

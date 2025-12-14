@@ -11,11 +11,6 @@ use bitflags::bitflags;
 use core::ops::{Index, IndexMut};
 use usize_cast::IntoUsize;
 
-/// The kernel's page table. This table is used by the kernel to identity
-/// map the physical memory of the system, allowing the kernel to easily
-/// access the physical memory of the system.
-static KERNEL_TABLE: spin::Mutex<Table> = spin::Mutex::new(Table::empty());
-
 /// The virtual address where the kernel base starts. The last 1 GiB of
 /// virtual memory is reserved for the kernel, and this address is where
 /// the kernel maps the first 1 GiB of physical memory. The rest of the
@@ -39,6 +34,123 @@ pub const PAGE_SIZE: usize = 4096;
 
 /// The shift required to convert a byte address to a page address.
 pub const PAGE_SHIFT: usize = 12;
+
+/// The kernel's page table. This table is used by the kernel to identity
+/// map the physical memory of the system, allowing the kernel to easily
+/// access the physical memory of the system.
+static KERNEL_TABLE: spin::Mutex<RootTable> = spin::Mutex::new(RootTable::empty());
+
+/// The root page table type. This is just an alias for `Table`, but it allows
+/// to distinguish between the root table and other tables in the page table
+/// hierarchy. This is useful for implementing the `Drop` trait for the root table,
+/// which will free all the tables and frames mapped by this table when it is
+/// dropped.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RootTable(Table);
+
+impl RootTable {
+    /// Create an empty root page table. The root page table is the top-level
+    /// page table that contains the entries for the entire virtual address
+    /// space.
+    /// Trying to use this table without properly initializing it will lead
+    /// to immediate page faults.
+    #[must_use]
+    pub const fn empty() -> Self {
+        Self(Table::empty())
+    }
+
+    /// Set all the user-accessible entries of the table to zero and copy the
+    /// kernel address space into the table.
+    ///
+    /// If any of the user-accessible entries was pointer to a valid table or
+    /// a valid page, this will lead to the memory leak of the entire table
+    /// and its sub-tables or pages.
+    pub fn copy_kernel_space(&mut self) {
+        let table = KERNEL_TABLE.lock();
+        self.user_space_mut().iter_mut().for_each(Entry::clear);
+        self.kernel_space_mut()
+            .iter_mut()
+            .zip(table.kernel_space())
+            .for_each(|(dst, src)| *dst = *src);
+    }
+
+    /// Set the current page table to this table.
+    ///
+    /// # Safety
+    /// This function is unsafe because it can cause undefined behavior if
+    /// the table is not properly initialized. The caller must ensure that
+    /// the table given will not cause an instant page fault when set as
+    /// the current page table, and must ensure that the table will remain
+    /// in memory while it is set as the current page table.
+    pub unsafe fn set_current(&self) {
+        let ppn = translate_kernel_ptr(self).as_usize() >> PAGE_SHIFT;
+        riscv::register::satp::set(riscv::register::satp::Mode::Sv39, 0, ppn);
+        riscv::asm::sfence_vma_all();
+    }
+
+    /// Get a mutable reference to the last entry of the kernel space.
+    #[must_use]
+    pub fn last_kernel_entry_mut(&mut self) -> &mut Entry {
+        &mut self.kernel_space_mut()[255]
+    }
+
+    /// Get a reference to the last entry of the kernel space.
+    #[must_use]
+    pub fn last_kernel_entry(&self) -> &Entry {
+        &self.kernel_space()[255]
+    }
+
+    /// Get a mutable reference to the kernel space entries of the table.
+    #[must_use]
+    pub fn kernel_space_mut(&mut self) -> &mut [Entry] {
+        &mut self.0.0[256..512]
+    }
+
+    /// Get a mutable reference to the user space entries of the table.
+    #[must_use]
+    pub fn user_space_mut(&mut self) -> &mut [Entry] {
+        &mut self.0.0[0..256]
+    }
+
+    /// Get a reference to the kernel space entries of the table.
+    #[must_use]
+    pub fn kernel_space(&self) -> &[Entry] {
+        &self.0.0[256..512]
+    }
+
+    /// Get a reference to the user space entries of the table.
+    #[must_use]
+    pub fn user_space(&self) -> &[Entry] {
+        &self.0.0[0..256]
+    }
+}
+
+impl AsRef<Table> for RootTable {
+    fn as_ref(&self) -> &Table {
+        &self.0
+    }
+}
+
+impl AsMut<Table> for RootTable {
+    fn as_mut(&mut self) -> &mut Table {
+        &mut self.0
+    }
+}
+
+impl Drop for RootTable {
+    fn drop(&mut self) {
+        // SAFETY: Switching to the kernel page table should be safe because
+        // the kernel table should be initialized at this point, and we must
+        // ensure that the thread's page table is not active when it is being
+        // dropped. Also, unmapping all user space mappings should be safe to
+        // do in the kernel because the kernel is dropping the entire address
+        // space, and should not have directs references in user space.
+        unsafe {
+            use_kernel_table();
+            unmap_all(self.user_space_mut());
+        }
+    }
+}
 
 /// Represents a page table. A page table is a data structure used by the
 /// processor to translate virtual addresses to physical addresses. The page
@@ -66,36 +178,6 @@ impl Table {
     pub const fn empty() -> Self {
         Self([Entry::missing(); 512])
     }
-
-    /// Set all the user-accessible entries of the table to zero and copy the
-    /// kernel address space into the table.
-    ///
-    /// If any of the user-accessible entries was pointer to a valid table or
-    /// a valid page, this will lead to the memory leak of the entire table
-    /// and its sub-tables or pages.
-    pub fn setup_from_kernel_space(&mut self) {
-        let table = KERNEL_TABLE.lock();
-        for i in 0..256 {
-            self[i] = Entry::missing();
-        }
-        for i in 256..512 {
-            self[i] = table[i];
-        }
-    }
-
-    /// Set the current page table to this table.
-    ///
-    /// # Safety
-    /// This function is unsafe because it can cause undefined behavior if
-    /// the table is not properly initialized. The caller must ensure that
-    /// the table given will not cause an instant page fault when set as
-    /// the current page table, and must ensure that the table will remain
-    /// in memory while it is set as the current page table.
-    pub unsafe fn set_current(&self) {
-        let ppn = translate_kernel_ptr(self).as_usize() >> PAGE_SHIFT;
-        riscv::register::satp::set(riscv::register::satp::Mode::Sv39, 0, ppn);
-        riscv::asm::sfence_vma_all();
-    }
 }
 
 impl Index<usize> for Table {
@@ -108,14 +190,6 @@ impl Index<usize> for Table {
 impl IndexMut<usize> for Table {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         &mut self.0[index]
-    }
-}
-
-impl Drop for Table {
-    fn drop(&mut self) {
-        // TODO: Free all the tables and frames mapped by this table. This will require
-        // traversing the entire table and freeing all the frames and tables
-        // mapped by this table.
     }
 }
 
@@ -347,6 +421,15 @@ impl Entry {
         self.readable() | self.writable() | self.executable()
     }
 
+    /// Get the physical address that the entry points to and clear the entry. This is
+    /// equivalent to calling `address()` followed by `clear()`, but is more convenient.
+    #[must_use]
+    pub fn address_and_clear(&mut self) -> Physical {
+        let addr = self.address();
+        self.clear();
+        addr
+    }
+
     /// Clear the entry, meaning that it does not point to a physical address
     /// and does not have any flags set.
     pub fn clear(&mut self) {
@@ -424,6 +507,10 @@ bitflags! {
 /// first 256 GiB of physical memory to the first 256 GiB of virtual memory.
 /// This will allow the kernel to access the physical memory of the system
 /// without having to manually map each page.
+///
+/// # Panics
+/// This function should never panic. If it does, it means that there is a bug
+/// in the MMU implementation.
 pub fn setup() {
     log::info!("Initializing the MMU and remapping the kernel");
     log::debug!("Using SV39 paging mode (3 levels of page tables)");
@@ -435,22 +522,23 @@ pub fn setup() {
     // of virtual memory in the kernel's address space. This will allow
     // the kernel to access any physical address easily without having
     // to manually map each page.
-    for i in 256..511 {
-        let entry = &mut table[i];
-        entry.set_address(Frame1Gib::new(Physical::new((i - 256) * 0x4000_0000)));
+    for (i, entry) in table.kernel_space_mut().iter_mut().enumerate() {
+        entry.set_address(Frame1Gib::from_index(i));
         entry.set_executable(true);
         entry.set_writable(true);
         entry.set_readable(true);
         entry.set_present(true);
+        entry.set_global(true);
     }
 
     // Map the kernel to the last 1 GiB of virtual memory.
-    let entry = &mut table[511];
+    let entry = table.last_kernel_entry_mut();
     entry.set_address(KERNEL_PHYSICAL_BASE);
     entry.set_executable(true);
     entry.set_writable(true);
     entry.set_readable(true);
     entry.set_present(true);
+    entry.set_global(true);
 
     // SAFETY: The kernel table was properly initialized and will not cause
     // a page fault when set as the current page table.
@@ -471,29 +559,44 @@ pub fn setup() {
 /// # Panics
 /// Panics if an error occurs while traversing the page table. This should
 /// never happen, as the page table should be properly initialized.
-pub fn map<T: addr::virt::Type>(
-    root: &mut Table,
+///
+/// # Safety
+/// This function is unsafe because mapping a physical address to a virtual
+/// address can lead to many issues if the caller is not careful. For example,
+/// this can lead to multiple mutable references to the same physical address
+/// if the caller maps the same physical address to multiple virtual addresses.
+/// This is not a problem by itself and can be very useful in some cases, but
+/// it can also create memory safety issues if the caller is not careful (e.g.,
+/// if the caller creates multiple mutable references to the same physical
+/// address and then writes to one of them, the other references will see
+/// the modified data, which can lead to undefined behavior).
+pub unsafe fn map<T: addr::virt::Type>(
+    root: &mut RootTable,
     virt: Virtual<T>,
     frame: Frame4Kib,
     rights: Rights,
     flags: Flags,
 ) -> Result<(), MapError> {
-    // TODO: Huge pages support
-
     // Extract the VPNs from the virtual address.
-    let vpn = [
-        (virt.as_usize() >> 12) & 0x1FF,
-        (virt.as_usize() >> 21) & 0x1FF,
-        (virt.as_usize() >> 30) & 0x1FF,
-    ];
+    let vpn = virt.vpn_sv39();
+    let mut entry = &mut root.as_mut()[vpn[0]];
+    for i in 1..3 {
+        // If we reach a leaf entry before the last level, this means that
+        // the page was mapped with a larger frame size (2 MiB or 1 GiB). This
+        // is currently not supported by this function, and somehow this has
+        // happened... In this case, I simply choose to tell the caller that
+        // the address is already mapped. But if the caller tries to unmap the
+        // address later, it will get an UnsupportedFrameSize error by the
+        // unmap function.
+        if entry.is_leaf() {
+            return Err(MapError::AlreadyMapped);
+        }
 
-    let mut entry = &mut root[vpn[2]];
-    for i in (0..2).rev() {
+        // If the intermediate table is missing, allocate a new table and
+        // update the entry to point to the new table.
         if !entry.present() {
-            // Allocate a new zeroed frame with the kernel flag set and
-            // create a new leaf entry.
-            let frame = mm::phys::allocate_frame(AllocationFlags::KERNEL | AllocationFlags::ZEROED)
-                .ok_or(MapError::OutOfMemory)?;
+            let allocation_flags = AllocationFlags::KERNEL | AllocationFlags::ZEROED;
+            let frame = mm::phys::allocate_frame(allocation_flags).ok_or(MapError::OutOfMemory)?;
 
             entry.clear();
             entry.set_address(frame);
@@ -505,15 +608,20 @@ pub fn map<T: addr::virt::Type>(
         entry = &mut table[vpn[i]];
     }
 
+    // If the address is already mapped, return an error instead of
+    // overwriting the existing mapping, to allow the caller to handle
+    // the situation properly.
     if entry.present() {
         return Err(MapError::AlreadyMapped);
     }
 
     // Update the entry with the physical address, rights and flags given.
+    // We do not need to flush the TLB here, as the page was not previously
+    // mapped and the TLB does not contain entries for unmapped pages.
     entry.set_address(frame);
-    entry.set_present(true);
     entry.set_rights(rights);
     entry.set_flags(flags);
+    entry.set_present(true);
     Ok(())
 }
 
@@ -527,28 +635,27 @@ pub fn map<T: addr::virt::Type>(
 /// # Panics
 /// Panics if an error occurs while traversing the page table. This should
 /// never happen, as the page table should be properly initialized.
-pub fn unmap<T: addr::virt::Type>(
-    root: &mut Table,
+///
+/// # Safety
+/// This function is unsafe because unmapping a virtual address can lead to
+/// many issues if the caller is not careful. For example, if the caller
+/// unmaps a virtual address that is still in use, ugly bugs may occur when
+/// that address is accessed again. The caller must ensure that the virtual
+/// address being unmapped is no longer in use by any part of the system or
+/// that the page fault handler can properly handle the resulting page fault.
+pub unsafe fn unmap<T: addr::virt::Type>(
+    root: &mut RootTable,
     virt: Virtual<T>,
-) -> Result<Physical, UnmapError> {
-    // Extract the VPNs from the virtual address.
-    let vpn = [
-        (virt.as_usize() >> 12) & 0x1FF,
-        (virt.as_usize() >> 21) & 0x1FF,
-        (virt.as_usize() >> 30) & 0x1FF,
-    ];
-
-    let mut entry = &mut root[vpn[2]];
-    for i in (0..2).rev() {
-        if !entry.present() {
-            return Err(UnmapError::NotMapped);
-        }
-
+) -> Result<Frame4Kib, UnmapError> {
+    let vpn = virt.vpn_sv39();
+    let mut entry = &mut root.as_mut()[vpn[0]];
+    for i in 1..3 {
+        // If we reach a leaf entry before the last level, this means that
+        // the page was mapped with a larger frame size (2 MiB or 1 GiB), which
+        // is not supported by this function.
         if entry.is_leaf() {
-            break;
-        }
-
-        if i == 0 {
+            return Err(UnmapError::UnsupportedFrameSize);
+        } else if !entry.present() {
             return Err(UnmapError::NotMapped);
         }
 
@@ -556,12 +663,56 @@ pub fn unmap<T: addr::virt::Type>(
         entry = &mut table[vpn[i]];
     }
 
+    // If the entry is not a leaf, this means that the page table is corrupted
+    // and is more than 3 levels deep. This should never happen in SV39 paging mode,
+    // and we panic in this case.
+    assert!(entry.is_leaf());
+
+    // If the entry is not present, return an error.
+    if !entry.present() {
+        return Err(UnmapError::NotMapped);
+    }
+
     // Get the physical address that was previously mapped to the given virtual
-    // address, unmap it, flush the TLB and return the physical address.
-    let address = entry.address();
-    entry.clear();
-    // TODO: Flush the TLB
-    Ok(address)
+    // address, unmap it, flush the TLB and return the physical address. The
+    // kernel does not use ASIDs, so we can just use 0 as the ASID.
+    let address = entry.address_and_clear();
+    riscv::asm::sfence_vma(0, virt.as_usize());
+    Ok(Frame4Kib::new_unchecked(address))
+}
+
+/// Unmap all the entries in the given table recursively, freeing all the tables
+/// and frames mapped by the table. This function is used to unmap a range of
+/// entries in a page table when deleting an entire address space.
+///
+/// # Safety
+/// This function is unsafe because unmapping all user space mappings can lead
+/// to memory safety issues (obviously). Usually, this function should only be called
+/// when deleting an entire address space that is no longer in use.
+unsafe fn unmap_all(entries: &mut [Entry]) {
+    for entry in entries.iter_mut() {
+        if let Some(table) = unsafe { entry.next_table_mut() } {
+            unmap_all(&mut table.0);
+            let frame = entry.address_and_clear();
+            mm::phys::deallocate_frame(frame);
+        } else if entry.present() {
+            let frame = entry.address_and_clear();
+            mm::phys::deallocate_frame(frame);
+        }
+    }
+}
+
+/// Use the kernel page table as the current page table. This will switch the
+/// current address space to a table only containing the kernel mappings. This
+/// is useful when destroying a user process, to avoid using a page table that
+/// is destroyed, thus leading to undefined behavior.
+///
+/// # Safety
+/// The caller must ensure that the kernel page table is properly initialized
+/// before calling this function, and must also ensure that no user space mappings
+/// will be accessed while the kernel page table is in use.
+pub unsafe fn use_kernel_table() {
+    KERNEL_TABLE.lock().set_current();
 }
 
 /// Translate a physical address to a virtual address. If the translation

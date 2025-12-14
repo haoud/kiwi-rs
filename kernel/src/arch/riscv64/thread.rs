@@ -16,7 +16,7 @@ unsafe extern "C" {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Thread {
     context: Box<trap::Context>,
-    table: Box<mmu::Table>,
+    table: Box<mmu::RootTable>,
 }
 
 impl Thread {
@@ -25,7 +25,7 @@ impl Thread {
     pub fn new() -> Self {
         Self {
             context: Box::new(trap::Context::new()),
-            table: Box::new(mmu::Table::empty()),
+            table: Box::new(mmu::RootTable::empty()),
         }
     }
 
@@ -41,15 +41,15 @@ impl Thread {
         &self.context
     }
 
-    /// Return a mutable reference to the page table of the thread.
+    /// Return a mutable reference to the root page table of the thread.
     #[must_use]
-    pub fn table_mut(&mut self) -> &mut mmu::Table {
+    pub fn root_table_mut(&mut self) -> &mut mmu::RootTable {
         &mut self.table
     }
 
-    /// Return a reference to the page table of the thread.
+    /// Return a reference to the root page table of the thread.
     #[must_use]
-    pub fn table(&self) -> &mmu::Table {
+    pub fn root_table(&self) -> &mmu::RootTable {
         &self.table
     }
 }
@@ -60,19 +60,13 @@ impl Default for Thread {
     }
 }
 
-impl Drop for Thread {
-    fn drop(&mut self) {
-        log::trace!("Dropping thread");
-    }
-}
-
 /// Create a new thread with the given instruction pointer and stack pointer.
 /// This will create a thread with a default context and an empty user page
 /// table (but still containing the kernel mappings).
 #[must_use]
 pub fn create(ip: usize, stack: usize) -> Thread {
     let mut thread = Thread::new();
-    thread.table.setup_from_kernel_space();
+    thread.table.copy_kernel_space();
     thread.context.set_sp(stack);
     thread.context.set_ip(ip);
     thread
@@ -96,11 +90,14 @@ pub fn save(_thread: &mut Thread) {
 /// function.
 pub fn execute(thread: &mut Thread) -> Trap {
     // TODO: Restore FPU state
+    // Switch to the thread's page table and execute the thread.
     unsafe {
-        thread.table().set_current();
+        thread.root_table().set_current();
         thread_execute(&mut thread.context);
     }
 
+    // Here, we have returned from a trap. Determine the cause of the trap,
+    // and return it to the caller to handle it.
     match riscv::register::scause::read().cause() {
         scause::Trap::Exception(Exception::UserEnvCall) => Trap::Syscall,
         scause::Trap::Exception(_) => Trap::Exception,

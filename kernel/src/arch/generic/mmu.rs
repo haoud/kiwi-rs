@@ -1,7 +1,7 @@
 pub use crate::arch::target::mmu::{PAGE_SHIFT, PAGE_SIZE};
-use crate::arch::target::{
-    addr::{self, Frame4Kib, Physical, Virtual, virt::Kernel},
-    mmu::Table,
+use crate::arch::{
+    target::addr::{self, Frame4Kib, Physical, Virtual, virt::Kernel},
+    target::mmu::RootTable,
 };
 use bitflags::bitflags;
 use usize_cast::IntoUsize;
@@ -135,6 +135,10 @@ pub enum MapError {
 pub enum UnmapError {
     /// The given virtual address was not mapped to any physical address.
     NotMapped,
+
+    /// The mapped frame has a size that is not supported by the kernel.
+    /// Currently, only 4 KiB frames are supported by the unmap function.
+    UnsupportedFrameSize,
 }
 
 /// Map a physical address to a virtual address, allowing the kernel to
@@ -145,8 +149,13 @@ pub enum UnmapError {
 /// # Errors
 /// For an exhaustive list of errors that can happen when trying to map a
 /// physical address to a virtual address, see the [`MapError`] enum.
-pub fn map<T: addr::virt::Type>(
-    table: &mut Table,
+///
+/// # Safety
+/// This function is unsafe because mapping a physical address to a virtual
+/// address can lead to memory safety issues in many ways. See the
+/// documentation in the architecture-specific implementation for more details.
+pub unsafe fn map<T: addr::virt::Type>(
+    table: &mut RootTable,
     virt: Virtual<T>,
     frame: Frame4Kib,
     rights: Rights,
@@ -162,10 +171,15 @@ pub fn map<T: addr::virt::Type>(
 /// # Errors
 /// For an exhaustive list of errors that can happen when trying to unmap a
 /// virtual address, see the [`UnmapError`] enum.
-pub fn unmap<T: addr::virt::Type>(
-    table: &mut Table,
+///
+/// # Safety
+/// This function is unsafe because unmapping a virtual address can lead to
+/// memory safety issues in many ways. See the documentation in the
+/// architecture-specific implementation for more details.
+pub unsafe fn unmap<T: addr::virt::Type>(
+    table: &mut RootTable,
     virt: Virtual<T>,
-) -> Result<Physical, UnmapError> {
+) -> Result<Frame4Kib, UnmapError> {
     crate::arch::target::mmu::unmap(table, virt)
 }
 
@@ -177,4 +191,17 @@ pub fn unmap<T: addr::virt::Type>(
 #[must_use]
 pub fn translate_physical(phys: impl Into<Physical>) -> Option<Virtual<Kernel>> {
     crate::arch::target::mmu::translate_physical(phys)
+}
+
+/// Set the current page table to the kernel page table. This will switch the
+/// current address space to a table only containing the kernel mappings. This
+/// is useful when destroying a user process, to avoid using a page table that
+/// is destroyed, thus leading to undefined behavior.
+///
+/// # Safety
+/// The caller must ensure that the kernel page table is properly initialized
+/// before calling this function, and must also ensure that no user space mappings
+/// will be accessed while the kernel page table is in use.
+pub unsafe fn use_kernel_table() {
+    crate::arch::target::mmu::use_kernel_table();
 }
