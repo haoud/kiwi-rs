@@ -597,8 +597,6 @@ pub unsafe fn map<T: addr::virt::Type>(
         if !entry.present() {
             let allocation_flags = AllocationFlags::KERNEL | AllocationFlags::ZEROED;
             let frame = mm::phys::allocate_frame(allocation_flags).ok_or(MapError::OutOfMemory)?;
-
-            entry.clear();
             entry.set_address(frame);
             entry.set_present(true);
         }

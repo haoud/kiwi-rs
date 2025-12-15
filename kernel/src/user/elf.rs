@@ -1,9 +1,11 @@
 use crate::{
     arch::{
         self,
+        mmu::Align,
         target::addr::{Virtual, virt::User},
     },
     mm::{self, phys::AllocationFlags},
+    user::{USER_STACK_BOTTOM, USER_STACK_SIZE, USER_STACK_TOP},
 };
 use usize_cast::IntoUsize;
 
@@ -24,8 +26,10 @@ pub unsafe fn load(file: &[u8]) -> arch::thread::Thread {
     let header = elf::ElfBytes::<elf::endian::LittleEndian>::minimal_parse(file)
         .expect("Failed to parse ELF file");
 
-    // TODO: Allocate and set up the user stack for the thread
-    let mut thread = arch::thread::create(header.ehdr.e_entry.into_usize(), 0);
+    let mut thread = arch::thread::create(
+        header.ehdr.e_entry.into_usize(),
+        usize::from(USER_STACK_TOP),
+    );
 
     for segment in header
         .segments()
@@ -90,6 +94,25 @@ pub unsafe fn load(file: &[u8]) -> arch::thread::Thread {
 
             misalign = 0;
         }
+    }
+
+    // Allocate and set up the user stack for the thread
+    // TODO: Delegate stack allocation to a user virtual memory manager
+    for page_idx in 0..USER_STACK_SIZE.page_count_up() {
+        let offset = page_idx * arch::mmu::PAGE_SIZE;
+        let addr = Virtual::<User>::new(usize::from(USER_STACK_BOTTOM) + offset);
+
+        let frame = mm::phys::allocate_frame(AllocationFlags::ZEROED)
+            .expect("Failed to allocate zeroed page for user stack");
+
+        arch::mmu::map(
+            thread.root_table_mut(),
+            addr,
+            frame,
+            arch::mmu::Rights::RWU,
+            arch::mmu::Flags::empty(),
+        )
+        .expect("Failed to map user stack page");
     }
 
     log::debug!("Loaded ELF file at 0x{:x}", header.ehdr.e_entry);

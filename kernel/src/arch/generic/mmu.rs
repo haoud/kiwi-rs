@@ -88,6 +88,9 @@ bitflags! {
         /// Read and Write permissions
         const RW = Self::READ.bits() | Self::WRITE.bits();
 
+        /// User, Read, Write permissions
+        const RWU = Self::RW.bits() | Self::USER.bits();
+
         /// Read, Write and Execute permissions
         const RWX = Self::RW.bits() | Self::EXECUTE.bits();
 
