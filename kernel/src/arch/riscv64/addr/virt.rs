@@ -107,7 +107,7 @@ impl Virtual<User> {
 
     /// The maximum valid user virtual address, assuming a 39-bit virtual
     /// address space.
-    pub const END: Self = Self(0x0000_007F_FFFF_FFFF, PhantomData);
+    pub const END: Self = Self(0x0000_003F_FFFF_FFFF, PhantomData);
 
     /// Create a new user virtual address.
     ///
@@ -138,7 +138,7 @@ impl Virtual<User> {
 impl Virtual<Kernel> {
     /// The minimum valid kernel virtual address, assuming a 39-bit virtual
     /// address space.
-    pub const START: Self = Self(0xFFFF_FF80_0000_0000, PhantomData);
+    pub const START: Self = Self(0xFFFF_FFC0_0000_0000, PhantomData);
 
     /// The maximum valid kernel virtual address, assuming a 39-bit virtual
     /// address space.
