@@ -35,5 +35,5 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
 #[unsafe(no_mangle)]
 unsafe extern "C" fn entry(hart: usize, device_tree: usize) -> ! {
     // Setup the architecture-specific stuff and start the kernel
-    crate::kiwi(super::setup(hart, device_tree as *const u8));
+    crate::kiwi(super::setup(hart, device_tree));
 }

@@ -40,19 +40,19 @@ impl<T: Type> Virtual<T> {
     /// the requested variant (`KERNEL` or `USER`)
     #[must_use]
     pub fn from_ptr_unchecked<P>(ptr: *const P) -> Self {
-        Self::new_unchecked(ptr as usize)
+        Self::new_unchecked(ptr.addr())
     }
 
     /// Return the physical address as a mutable pointer.
     #[must_use]
     pub const fn as_mut_ptr<P>(&self) -> *mut P {
-        self.0 as *mut P
+        core::ptr::with_exposed_provenance_mut(self.0)
     }
 
     /// Return the physical address as a const pointer.
     #[must_use]
     pub const fn as_ptr<P>(&self) -> *const P {
-        self.0 as *const P
+        core::ptr::with_exposed_provenance(self.0)
     }
 
     /// Return the address as a `usize`.
@@ -176,7 +176,7 @@ impl Virtual<Kernel> {
     /// address space (as defined by [`START`] and [`END`]).
     #[must_use]
     pub fn from_ptr<P>(ptr: *const P) -> Self {
-        Self::new(ptr as usize)
+        Self::new(ptr.addr())
     }
 
     /// Align the address up to the nearest page boundary. If the address is

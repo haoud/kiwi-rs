@@ -2,6 +2,9 @@
 #![no_main]
 #![warn(clippy::all)]
 #![warn(clippy::pedantic)]
+#![feature(strict_provenance_lints)]
+#![warn(fuzzy_provenance_casts)]
+#![warn(lossy_provenance_casts)]
 #![allow(unsafe_op_in_unsafe_fn)]
 #![allow(clippy::module_name_repetitions)]
 

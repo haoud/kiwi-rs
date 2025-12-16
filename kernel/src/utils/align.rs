@@ -138,6 +138,6 @@ impl IsAligned for usize {
 
 impl<T> IsAligned for *const T {
     fn is_aligned(&self, align: usize) -> bool {
-        (*self as usize & (align - 1)) == 0
+        (self.addr() & (align - 1)) == 0
     }
 }

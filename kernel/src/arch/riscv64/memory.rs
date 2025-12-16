@@ -45,7 +45,7 @@ impl UsableMemory {
         let ram_start = device_tree
             .memory()
             .regions()
-            .map(|region| region.starting_address as usize)
+            .map(|region| region.starting_address.addr())
             .min()
             .unwrap();
 
@@ -53,7 +53,7 @@ impl UsableMemory {
             .memory()
             .regions()
             .map(|region| {
-                let start = region.starting_address as usize;
+                let start = region.starting_address.addr();
                 start + region.size.unwrap_or(0)
             })
             .max()
@@ -73,7 +73,7 @@ impl UsableMemory {
         // them to the usable memory regions
         let mut regions = Vec::<Region, 32>::new();
         for region in device_tree.memory().regions() {
-            let mut start = region.starting_address as usize;
+            let mut start = region.starting_address.addr();
             let mut length = region.size.unwrap_or(0);
 
             // The region 0x80000000 to 0x80200000 is reserved for the firmware

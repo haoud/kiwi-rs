@@ -748,5 +748,5 @@ pub fn translate_virtual_kernel(virt: Virtual<Kernel>) -> Physical {
 /// i.e. if it is not greater than or equal to `KERNEL_VIRTUAL_BASE`.
 #[must_use]
 pub fn translate_kernel_ptr<T>(ptr: *const T) -> Physical {
-    translate_virtual_kernel(Virtual::<Kernel>::new(ptr as usize))
+    translate_virtual_kernel(Virtual::<Kernel>::new(ptr.addr()))
 }

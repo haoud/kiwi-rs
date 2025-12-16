@@ -71,18 +71,6 @@ impl Physical {
         Self(0)
     }
 
-    /// Return the physical address as a mutable pointer.
-    #[must_use]
-    pub const fn as_mut_ptr<T>(&self) -> *mut T {
-        self.0 as *mut T
-    }
-
-    /// Return the physical address as a const pointer.
-    #[must_use]
-    pub const fn as_ptr<T>(&self) -> *const T {
-        self.0 as *const T
-    }
-
     /// Return the address as a `usize`.
     #[must_use]
     pub const fn as_usize(&self) -> usize {
