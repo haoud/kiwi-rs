@@ -21,5 +21,10 @@ pub fn exit(code: i32) -> ! {
 /// since your task is voluntarily yielding, it may gain priority in the
 /// scheduler or be rescheduled more quickly when it becomes runnable again.
 pub fn yield_now() {
-    // TODO: implement syscall for yielding
+    unsafe {
+        core::arch::asm!("ecall",
+          in("a7") 2,
+          options(nomem, nostack)
+        );
+    }
 }

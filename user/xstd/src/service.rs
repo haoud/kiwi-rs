@@ -59,7 +59,7 @@ pub fn register(name: &str) -> Result<(), ServiceRegisterError> {
     let ret;
     unsafe {
         core::arch::asm!("ecall",
-            in("a7") 2,                 // syscall number for service_register
+            in("a7") 3,                 // syscall number for service_register
             in("a0") name.as_ptr(),     // pointer to the service name
             in("a1") name.len(),        // length of the service name
             lateout("a0") ret,          // return value
@@ -83,7 +83,7 @@ pub fn unregister() -> Result<(), ServiceUnregisterError> {
     let ret;
     unsafe {
         core::arch::asm!("ecall",
-            in("a7") 3,         // syscall number for service_unregister
+            in("a7") 4,         // syscall number for service_unregister
             lateout("a0") ret,  // return value
             options(nostack, preserves_flags)
         );

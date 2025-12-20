@@ -13,13 +13,16 @@ pub enum SyscallOp {
     Nop = 0,
 
     /// Exit the current task.
-    Exit = 1,
+    TaskExit = 1,
+
+    /// Yield the current task's execution.
+    TaskYield = 2,
 
     /// Register a new service.
-    ServiceRegister = 2,
+    ServiceRegister = 3,
 
     /// Unregister a service.
-    ServiceUnregister = 3,
+    ServiceUnregister = 4,
 
     /// Used for any unknown syscall IDs.
     Unknown = u32::MAX,
@@ -29,9 +32,10 @@ impl From<usize> for SyscallOp {
     fn from(value: usize) -> Self {
         match u32::try_from(value).unwrap_or(u32::MAX) {
             0 => SyscallOp::Nop,
-            1 => SyscallOp::Exit,
-            2 => SyscallOp::ServiceRegister,
-            3 => SyscallOp::ServiceUnregister,
+            1 => SyscallOp::TaskExit,
+            2 => SyscallOp::TaskYield,
+            3 => SyscallOp::ServiceRegister,
+            4 => SyscallOp::ServiceUnregister,
             _ => SyscallOp::Unknown,
         }
     }
@@ -54,7 +58,8 @@ pub fn handle_syscall(thread: &mut arch::thread::Thread) -> Resume {
     log::trace!("Handling syscall ID: {}", id);
     let result = match SyscallOp::from(id) {
         SyscallOp::Nop => Ok(Resume::Continue),
-        SyscallOp::Exit => Ok(Resume::Terminate(args[0] as i32)),
+        SyscallOp::TaskExit => Ok(Resume::Terminate(args[0] as i32)),
+        SyscallOp::TaskYield => Ok(Resume::Yield),
         SyscallOp::ServiceRegister => {
             let name_ptr = core::ptr::with_exposed_provenance_mut::<u8>(args[0]);
             let name_len = args[1];

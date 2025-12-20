@@ -2,9 +2,10 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SyscallNumber {
     Nop = 0,
-    Exit = 1,
-    ServiceRegister = 2,
-    ServiceUnregister = 3,
+    TaskExit = 1,
+    TaskYield = 2,
+    ServiceRegister = 3,
+    ServiceUnregister = 4,
 }
 
 /// A trait that help to convert syscall return codes into specific error
