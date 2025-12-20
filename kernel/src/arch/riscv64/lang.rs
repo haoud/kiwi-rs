@@ -2,11 +2,6 @@ use macros::init;
 
 core::arch::global_asm!(include_str!("asm/boot.asm"));
 
-unsafe extern "C" {
-    static __bss_start: [u8; 0];
-    static __bss_end: [u8; 0];
-}
-
 /// Oops ! The kernel panicked and must be stopped. Since we are developing a
 /// microkernel, this should never happen. If it does, it means that there is a
 /// bug in the kernel. It will print some information about the panic if the

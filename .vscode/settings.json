@@ -8,8 +8,10 @@
         "enabled": true
     },
     "rust-analyzer.linkedProjects": [
+        "kernel/Cargo.toml",
         "user/init/Cargo.toml",
         "user/echo/Cargo.toml",
         "user/xstd/Cargo.toml",
     ],
+    "makefile.configureOnOpen": false,
 }

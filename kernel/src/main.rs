@@ -20,14 +20,27 @@ extern crate alloc;
 /// The initial user-space process that will be executed by the kernel. This
 /// is the only user-space process that is started directly by the kernel.
 /// All other user-space processes must be started by the `init` process.
-static INIT: &[u8] =
-    include_bytes!("../../user/init/target/riscv64gc-unknown-none-elf/release/init");
+///
+/// # Why using `include_bytes!` this way?
+/// This approach ensures that the binary is included in the kernel binary
+/// at compile time, and is placed in a specific section of the kernel's
+/// memory layout designated for initialization data. Using the `#[macros::initdata]`
+/// attribute on an &[u8] only put the reference to the data in that section,
+/// not the data itself.
+#[macros::initdata]
+static INIT: [u8; include_bytes!(
+    "../../user/init/target/riscv64gc-unknown-none-elf/release/init"
+)
+.len()] = *include_bytes!("../../user/init/target/riscv64gc-unknown-none-elf/release/init");
 
 /// The echo user-space process binary. This process is used to demonstrate
 /// inter-process communication (IPC) capabilities of the kernel, and is not
 /// meant to stay here permanently and will be removed in future versions.
-static ECHO: &[u8] =
-    include_bytes!("../../user/echo/target/riscv64gc-unknown-none-elf/release/echo");
+#[macros::initdata]
+static ECHO: [u8; include_bytes!(
+    "../../user/echo/target/riscv64gc-unknown-none-elf/release/echo"
+)
+.len()] = *include_bytes!("../../user/echo/target/riscv64gc-unknown-none-elf/release/echo");
 
 /// The `kiwi` function is called after the architecture-specific
 /// initialization was completed. It is responsible for setting up the
@@ -43,8 +56,8 @@ pub unsafe extern "Rust" fn kiwi(memory: arch::memory::UsableMemory) -> ! {
     mm::phys::setup(memory);
     mm::heap::setup();
     future::executor::setup();
-    future::executor::spawn(user::elf::load(INIT));
-    future::executor::spawn(user::elf::load(ECHO));
+    future::executor::spawn(user::elf::load(&INIT));
+    future::executor::spawn(user::elf::load(&ECHO));
 
     ipc::service::setup();
 

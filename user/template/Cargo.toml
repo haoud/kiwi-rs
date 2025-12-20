@@ -5,3 +5,9 @@ edition = "2024"
 
 [dependencies]
 xstd = { path = "../xstd" }
+
+[profile.release]
+codegen-units = 1
+opt-level = "s"
+strip = true
+lto = true
