@@ -125,3 +125,9 @@ pub fn get_syscall_args(thread: &Thread) -> [usize; 6] {
         thread.context.get_register(15),
     ]
 }
+
+/// Set the return value of the syscall for the given thread. On RISC-V,
+/// the return value is stored in the a0 register (x10).
+pub fn set_syscall_return(thread: &mut Thread, value: isize) {
+    thread.context.set_register(10, value.cast_unsigned());
+}

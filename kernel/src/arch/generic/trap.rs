@@ -99,3 +99,7 @@ pub fn handle_exception(thread: &mut crate::arch::thread::Thread) -> Resume {
 pub fn handle_interrupt(thread: &mut crate::arch::thread::Thread) -> Resume {
     crate::arch::target::trap::handle_interrupt(thread)
 }
+
+pub fn handle_syscall(thread: &mut crate::arch::thread::Thread) -> Resume {
+    crate::arch::target::trap::handle_syscall(thread)
+}

@@ -1,6 +1,9 @@
 use crate::arch::target::addr::{Virtual, virt::User};
 
 pub mod elf;
+pub mod op;
+pub mod ptr;
+pub mod string;
 pub mod syscall;
 
 /// The top address of the user stack, exclusive. This is located just below the

@@ -14,6 +14,12 @@ use crossbeam::queue::ArrayQueue;
 /// a state machine that can be paused and resumed at specific points.
 static EXECUTOR: spin::Once<Executor> = spin::Once::new();
 
+/// The identifier of the currently running task on this core. This is
+/// used to identify the task that is currently running on this core.
+/// This is useful for syscalls that need to know the current task
+/// identifier. If no task is running, this will be `None`.
+static CURRENT_TASK_ID: spin::Mutex<Option<task::Identifier>> = spin::Mutex::new(None);
+
 /// The executor is responsible to run all user-space tasks. It behaves like
 /// a simple First-In-First-Out (FIFO) cooperative scheduler.
 ///
@@ -77,6 +83,9 @@ impl Executor<'_> {
                 return;
             };
 
+            // Set the current task ID to the task that is being run now.
+            set_current_task_id(id);
+
             match task.poll() {
                 core::task::Poll::Ready(()) => {
                     // The task has completed. Therefore, we have nothing to
@@ -91,6 +100,9 @@ impl Executor<'_> {
                     assert!(self.tasks.lock().insert(id, task).is_none());
                 }
             }
+
+            // Clear the current task ID because no task is running now.
+            clear_current_task_id();
         }
     }
 
@@ -111,6 +123,12 @@ impl Default for Executor<'_> {
 pub fn setup() {
     log::info!("Setting up the kernel executor");
     EXECUTOR.call_once(Executor::new);
+}
+
+/// Return the identifier of the currently running task on this core. If no
+/// task is running, this will return `None`.
+pub fn current_task_id() -> Option<task::Identifier> {
+    *CURRENT_TASK_ID.lock()
 }
 
 /// Spawn a new future into the executor.
@@ -146,4 +164,14 @@ pub fn run() -> ! {
             arch::cpu::relax();
         }
     }
+}
+
+/// Set the identifier of the currently running task on this core.
+fn set_current_task_id(id: task::Identifier) {
+    *CURRENT_TASK_ID.lock() = Some(id);
+}
+
+/// Clear the identifier of the currently running task on this core.
+fn clear_current_task_id() {
+    *CURRENT_TASK_ID.lock() = None;
 }

@@ -18,3 +18,9 @@ pub fn disable() {
         riscv::register::sstatus::clear_sie();
     }
 }
+
+/// Check if interrupts are enabled.
+#[must_use]
+pub fn enabled() -> bool {
+    riscv::register::sstatus::read().sie()
+}

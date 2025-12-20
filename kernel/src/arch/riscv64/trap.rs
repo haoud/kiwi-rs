@@ -1,5 +1,8 @@
 use super::timer;
-use crate::arch::{thread::Thread, trap::Resume};
+use crate::{
+    arch::{thread::Thread, trap::Resume},
+    user,
+};
 use riscv::register::{
     scause::{Exception, Interrupt, Trap},
     stvec::TrapMode,
@@ -48,6 +51,19 @@ impl Context {
         match index {
             0 => 0,
             1..=31 => self.registers[index - 1],
+            _ => panic!("Register index out of bounds: {}", index),
+        }
+    }
+
+    /// Set the value of the given register (x0 - x31). If x0 is
+    /// specified, the operation is ignored since x0 is always 0.
+    ///
+    /// # Panics
+    /// Panics if the index is out of bounds.
+    pub fn set_register(&mut self, index: usize, value: usize) {
+        match index {
+            0 => {}
+            1..=31 => self.registers[index - 1] = value,
             _ => panic!("Register index out of bounds: {}", index),
         }
     }
@@ -134,6 +150,18 @@ pub fn handle_interrupt(_thread: &mut Thread) -> Resume {
             Resume::Continue
         }
     }
+}
+
+/// Handle a syscall trap. This function delegates the syscall handling to
+/// the `user::syscall::handle_syscall` function and then advances the
+/// program counter to the next instruction. This is different from other
+/// architectures where the syscall instruction saves the return address
+/// of the next instruction, while on RISC-V, the program counter points
+/// to the syscall instruction itself.
+pub fn handle_syscall(thread: &mut crate::arch::thread::Thread) -> Resume {
+    let resume = user::syscall::handle_syscall(thread);
+    thread.context_mut().sepc += 4;
+    resume
 }
 
 #[unsafe(no_mangle)]

@@ -24,3 +24,8 @@ pub fn get_syscall_id(thread: &Thread) -> usize {
 pub fn get_syscall_args(thread: &Thread) -> [usize; 6] {
     crate::arch::target::thread::get_syscall_args(thread)
 }
+
+/// Set the return value of the syscall for the given thread.
+pub fn set_syscall_return(thread: &mut Thread, value: isize) {
+    crate::arch::target::thread::set_syscall_return(thread, value);
+}

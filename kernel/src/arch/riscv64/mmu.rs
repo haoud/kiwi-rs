@@ -713,6 +713,25 @@ pub unsafe fn use_kernel_table() {
     KERNEL_TABLE.lock().set_current();
 }
 
+/// Allow the kernel to access user pages by setting the SUM bit in the sstatus
+/// register. This is useful when the kernel needs to access user pages, for
+/// example when handling a page fault or when copying data between user and
+/// kernel space.
+pub fn allow_user_page_access() {
+    unsafe {
+        riscv::register::sstatus::set_sum();
+    }
+}
+
+/// Forbid the kernel from accessing user pages by clearing the SUM bit in
+/// the sstatus register. This is useful to prevent the kernel from accidentally
+/// accessing user pages, which can lead to security issues.
+pub fn forbid_user_page_access() {
+    unsafe {
+        riscv::register::sstatus::clear_sum();
+    }
+}
+
 /// Translate a physical address to a virtual address. If the translation
 /// cannot be done because the physical address is greater than the maximum
 /// virtual address representable by the system, this function will return

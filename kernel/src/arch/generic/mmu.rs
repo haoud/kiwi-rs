@@ -208,3 +208,21 @@ pub fn translate_physical(phys: impl Into<Physical>) -> Option<Virtual<Kernel>> 
 pub unsafe fn use_kernel_table() {
     crate::arch::target::mmu::use_kernel_table();
 }
+
+/// Allow the kernel to access user pages. This is useful when the MMU implements
+/// a security feature that prevents the kernel from accessing user pages by
+/// default. This function will enable the necessary permissions to allow the
+/// kernel to access user pages.
+pub fn allow_user_page_access() {
+    crate::arch::target::mmu::allow_user_page_access();
+}
+
+/// Disallow the kernel from accessing user pages. This is useful when the MMU
+/// implements a security feature that allows the kernel to access user pages.
+/// This function will disable the necessary permissions to prevent the kernel
+/// from accessing user pages.
+/// If the kernel tries to access a user page while this is disabled, a page
+/// fault will occur.
+pub fn forbid_user_page_access() {
+    crate::arch::target::mmu::forbid_user_page_access();
+}

@@ -5,6 +5,6 @@ edition = "2024"
 
 [profile.release]
 codegen-units = 1
-opt-level = "z"
+opt-level = "s"
 strip = true
 lto = true

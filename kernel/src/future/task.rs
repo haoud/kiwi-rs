@@ -80,3 +80,9 @@ impl From<Identifier> for usize {
         id.0
     }
 }
+
+impl core::fmt::Display for Identifier {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}

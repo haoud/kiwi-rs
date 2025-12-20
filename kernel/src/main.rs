@@ -10,6 +10,7 @@
 
 pub mod arch;
 pub mod future;
+pub mod ipc;
 pub mod mm;
 pub mod user;
 pub mod utils;
@@ -37,6 +38,8 @@ pub unsafe extern "Rust" fn kiwi(memory: arch::memory::UsableMemory) -> ! {
     mm::heap::setup();
     future::executor::setup();
     future::executor::spawn(user::elf::load(INIT));
+
+    ipc::service::setup();
 
     let memory_usage = mm::phys::kernel_memory_pages() * 4;
     log::info!("Boot completed !");
