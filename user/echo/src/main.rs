@@ -3,7 +3,5 @@
 
 #[xstd::main]
 pub fn main() {
-    loop {
-        xstd::task::yield_now();
-    }
+    xstd::service::register("echo").unwrap();
 }

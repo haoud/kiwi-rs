@@ -23,6 +23,12 @@ extern crate alloc;
 static INIT: &[u8] =
     include_bytes!("../../user/init/target/riscv64gc-unknown-none-elf/release/init");
 
+/// The echo user-space process binary. This process is used to demonstrate
+/// inter-process communication (IPC) capabilities of the kernel, and is not
+/// meant to stay here permanently and will be removed in future versions.
+static ECHO: &[u8] =
+    include_bytes!("../../user/echo/target/riscv64gc-unknown-none-elf/release/echo");
+
 /// The `kiwi` function is called after the architecture-specific
 /// initialization was completed. It is responsible for setting up the
 /// kernel and starting the first user-space process.
@@ -38,6 +44,7 @@ pub unsafe extern "Rust" fn kiwi(memory: arch::memory::UsableMemory) -> ! {
     mm::heap::setup();
     future::executor::setup();
     future::executor::spawn(user::elf::load(INIT));
+    future::executor::spawn(user::elf::load(ECHO));
 
     ipc::service::setup();
 

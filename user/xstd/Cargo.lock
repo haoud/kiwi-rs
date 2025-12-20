@@ -3,13 +3,6 @@
 version = 4
 
 [[package]]
-name = "init"
-version = "0.1.0"
-dependencies = [
- "xstd",
-]
-
-[[package]]
 name = "macros"
 version = "0.1.0"
 dependencies = [
