@@ -5,6 +5,7 @@ use core::{
 use futures::Future;
 
 pub mod executor;
+pub mod mutex;
 pub mod task;
 pub mod user;
 pub mod waker;
