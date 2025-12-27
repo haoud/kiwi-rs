@@ -48,6 +48,29 @@ impl SyscallCode for ServiceUnregisterError {
     }
 }
 
+/// Errors that may occur when connecting to a service.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ServiceConnectError {
+    /// An unknown error occurred.
+    Unknown = 0,
+
+    /// An invalid name was provided.
+    BadName = 1,
+
+    /// The specified service was not found.
+    ServiceNotFound = 2,
+}
+
+impl SyscallCode for ServiceConnectError {
+    fn from_syscall_code(code: isize) -> Self {
+        match -code {
+            1 => ServiceConnectError::BadName,
+            2 => ServiceConnectError::ServiceNotFound,
+            _ => ServiceConnectError::Unknown,
+        }
+    }
+}
+
 /// Registers the current task as a service provider with the given name. The
 /// name must be a valid UTF-8 string and unique among all registered services.
 ///
@@ -93,5 +116,29 @@ pub fn unregister() -> Result<(), ServiceUnregisterError> {
         Err(ServiceUnregisterError::from_syscall_code(ret as isize))
     } else {
         Ok(())
+    }
+}
+
+/// Connects to a service by its name and returns a handle to the service.
+///
+/// # Errors
+/// This function returns a [`ServiceConnectError`] if the connection fails,
+/// such as when the service is not found or an invalid name is provided.
+pub fn connect(name: &str) -> Result<usize, ServiceConnectError> {
+    let ret;
+    unsafe {
+        core::arch::asm!("ecall",
+            in("a7") 5,                 // syscall number for service_connect
+            in("a0") name.as_ptr(),     // pointer to the service name
+            in("a1") name.len(),        // length of the service name
+            lateout("a0") ret,          // return value
+            options(nostack, preserves_flags)
+        );
+    }
+
+    if syscall::failed(ret) {
+        Err(ServiceConnectError::from_syscall_code(ret as isize))
+    } else {
+        Ok(ret)
     }
 }
