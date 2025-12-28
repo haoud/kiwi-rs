@@ -26,7 +26,7 @@ pub async fn thread_loop(mut thread: arch::thread::Thread) {
         let resume = match trap {
             Trap::Exception => arch::trap::handle_exception(&mut thread),
             Trap::Interrupt => arch::trap::handle_interrupt(&mut thread),
-            Trap::Syscall => arch::trap::handle_syscall(&mut thread),
+            Trap::Syscall => arch::trap::handle_syscall(&mut thread).await,
         };
 
         // TODO: Proper quantum management: if a thread yields, it should not

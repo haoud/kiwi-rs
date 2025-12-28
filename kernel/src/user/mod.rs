@@ -1,6 +1,7 @@
 use crate::arch::target::addr::{Virtual, virt::User};
 
 pub mod elf;
+pub mod object;
 pub mod op;
 pub mod ptr;
 pub mod string;

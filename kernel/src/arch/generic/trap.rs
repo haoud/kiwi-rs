@@ -100,6 +100,6 @@ pub fn handle_interrupt(thread: &mut crate::arch::thread::Thread) -> Resume {
     crate::arch::target::trap::handle_interrupt(thread)
 }
 
-pub fn handle_syscall(thread: &mut crate::arch::thread::Thread) -> Resume {
-    crate::arch::target::trap::handle_syscall(thread)
+pub async fn handle_syscall(thread: &mut crate::arch::thread::Thread) -> Resume {
+    crate::arch::target::trap::handle_syscall(thread).await
 }

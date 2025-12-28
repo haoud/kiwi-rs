@@ -1,8 +1,9 @@
 use crate::{
     arch::{self, trap::Resume},
-    user::syscall,
+    user::{ptr::Pointer, syscall},
 };
 
+pub mod ipc;
 pub mod service;
 
 /// Enumeration of supported syscall operations by the kernel.
@@ -27,6 +28,15 @@ pub enum SyscallOp {
     /// Connect to a service.
     ServiceConnect = 5,
 
+    /// Send an IPC message
+    IpcSend = 6,
+
+    /// Receive an IPC message
+    IpcReceive = 7,
+
+    /// Reply to an IPC message
+    IpcReply = 8,
+
     /// Used for any unknown syscall IDs.
     Unknown = u32::MAX,
 }
@@ -40,6 +50,9 @@ impl From<usize> for SyscallOp {
             3 => SyscallOp::ServiceRegister,
             4 => SyscallOp::ServiceUnregister,
             5 => SyscallOp::ServiceConnect,
+            6 => SyscallOp::IpcSend,
+            7 => SyscallOp::IpcReceive,
+            8 => SyscallOp::IpcReply,
             _ => SyscallOp::Unknown,
         }
     }
@@ -63,7 +76,7 @@ pub struct SyscallReturnValue {
 #[must_use]
 #[allow(clippy::cast_possible_wrap)]
 #[allow(clippy::cast_possible_truncation)]
-pub fn handle_syscall(thread: &mut arch::thread::Thread) -> Resume {
+pub async fn handle_syscall(thread: &mut arch::thread::Thread) -> Resume {
     let args = arch::thread::get_syscall_args(thread);
     let id = arch::thread::get_syscall_id(thread);
 
@@ -95,6 +108,46 @@ pub fn handle_syscall(thread: &mut arch::thread::Thread) -> Resume {
             let name_ptr = core::ptr::with_exposed_provenance_mut::<u8>(args[0]);
             let name_len = args[1];
             syscall::service::connect(name_ptr, name_len).map_err(isize::from)
+        }
+        SyscallOp::IpcSend => {
+            let message_ptr = core::ptr::with_exposed_provenance::<syscall::ipc::Message>(args[0]);
+            let reply_ptr = core::ptr::with_exposed_provenance_mut::<syscall::ipc::Reply>(args[1]);
+            let message_ptr = Pointer::new(message_ptr.cast_mut())
+                .ok_or(isize::from(syscall::ipc::IpcSendError::BadMessage));
+            let reply_ptr =
+                Pointer::new(reply_ptr).ok_or(isize::from(syscall::ipc::IpcSendError::BadMessage));
+
+            if let (Ok(msg_ptr), Ok(rpl_ptr)) = (message_ptr, reply_ptr) {
+                syscall::ipc::send(thread, msg_ptr, rpl_ptr)
+                    .await
+                    .map_err(isize::from)
+            } else {
+                Err(isize::from(syscall::ipc::IpcSendError::BadMessage))
+            }
+        }
+        SyscallOp::IpcReceive => {
+            let message_ptr =
+                core::ptr::with_exposed_provenance_mut::<syscall::ipc::Message>(args[0]);
+            let message_ptr = Pointer::new(message_ptr)
+                .ok_or(isize::from(syscall::ipc::IpcReceiveError::BadBuffer));
+            if let Ok(ptr) = message_ptr {
+                syscall::ipc::receive(thread, ptr)
+                    .await
+                    .map_err(isize::from)
+            } else {
+                Err(isize::from(syscall::ipc::IpcReceiveError::BadBuffer))
+            }
+        }
+        SyscallOp::IpcReply => {
+            let to = args[0];
+            let reply_ptr = core::ptr::with_exposed_provenance::<syscall::ipc::Reply>(args[1]);
+            let reply_ptr = Pointer::new(reply_ptr.cast_mut())
+                .ok_or(isize::from(syscall::ipc::IpcReplyError::BadMessage));
+            if let Ok(ptr) = reply_ptr {
+                syscall::ipc::reply(to, ptr).map_err(isize::from)
+            } else {
+                Err(isize::from(syscall::ipc::IpcReplyError::BadMessage))
+            }
         }
         SyscallOp::Unknown => {
             log::warn!("Unknown syscall ID: {}", id);

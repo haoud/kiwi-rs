@@ -16,6 +16,13 @@ pub struct Pointer<T> {
     inner: *mut T,
 }
 
+/// SAFETY: This is safe to send between threads because the userland memory
+/// can be accessed concurrently by multiple threads, and data races are
+/// allowed in the userland memory since it is outside of the kernel control.
+/// Therefore, sending a `Pointer<T>` between threads does not violate any memory
+/// safety rules.
+unsafe impl<T: Send> Send for Pointer<T> {}
+
 impl<T> Pointer<T> {
     /// Tries to create a new user pointer. Returns `None` if the given pointer
     /// is not fully in the userland memory. This is equivalent to calling

@@ -1,11 +1,21 @@
 #![no_std]
 #![no_main]
 
+/// An initialization service that connects to the "echo" service, sends a
+/// message, and verifies the response. If the response matches the sent
+/// message, it exits with a success code; otherwise, it exits with an error
+/// code. This service demonstrates basic IPC communication and service
+/// interaction.
 #[xstd::main]
 pub fn main() {
-    let _echo = connect_until_success("echo");
-    loop {
-        xstd::task::yield_now();
+    let echo = connect_until_success("echo");
+    let reply = xstd::ipc::send(echo, 42, b"Hello, world!").unwrap();
+    let payload = &reply.payload[..reply.payload_len];
+
+    if reply.status == 42 && payload == b"Hello, world!" {
+        xstd::task::exit(0)
+    } else {
+        xstd::task::exit(-1)
     }
 }
 

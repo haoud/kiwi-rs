@@ -158,8 +158,8 @@ pub fn handle_interrupt(_thread: &mut Thread) -> Resume {
 /// architectures where the syscall instruction saves the return address
 /// of the next instruction, while on RISC-V, the program counter points
 /// to the syscall instruction itself.
-pub fn handle_syscall(thread: &mut crate::arch::thread::Thread) -> Resume {
-    let resume = user::syscall::handle_syscall(thread);
+pub async fn handle_syscall(thread: &mut crate::arch::thread::Thread) -> Resume {
+    let resume = user::syscall::handle_syscall(thread).await;
     thread.context_mut().sepc += 4;
     resume
 }
