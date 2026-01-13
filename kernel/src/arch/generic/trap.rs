@@ -1,3 +1,5 @@
+use crate::config;
+
 /// The stack used by the kernel to handle interrupts and exceptions. Kiwi
 /// has made the choice to use a single stack per core to handle interrupts
 /// instead of using a separate kernel stack for threads.

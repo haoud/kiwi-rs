@@ -6,6 +6,11 @@ edition = "2024"
 [dependencies]
 xstd = { path = "../xstd" }
 
+[workspace.lints.rust]
+undocumented_unsafe_blocks = "warn"
+pedantic = "warn"
+all = "warn"
+
 [profile.release]
 codegen-units = 1
 opt-level = "s"

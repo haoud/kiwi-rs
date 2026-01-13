@@ -1,18 +1,12 @@
 [package]
-name = "init"
+name = "kiwi-seqlock"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-xstd = { path = "../xstd" }
+spin = "0.10.0"
 
 [workspace.lints.rust]
 undocumented_unsafe_blocks = "warn"
 pedantic = "warn"
 all = "warn"
-
-[profile.release]
-codegen-units = 1
-opt-level = "s"
-strip = true
-lto = true

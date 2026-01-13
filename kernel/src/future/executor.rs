@@ -1,3 +1,4 @@
+use crate::config;
 use crate::future::task::{self, Task};
 use crate::{arch, future::user::thread_loop};
 use alloc::boxed::Box;

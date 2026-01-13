@@ -1,11 +1,14 @@
 [package]
-name = "xstd"
+name = "kiwi-syscall"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+default = ["alloc"]
+alloc = ["zerocopy/alloc"]
+
 [dependencies]
-syscall = { path = "../../crates/kiwi-syscall", package = "kiwi-syscall", default-features = false }
-macros = { path = "macros" }
+zerocopy = { version = "0.8", features = ["derive"] }
 
 [workspace.lints.rust]
 undocumented_unsafe_blocks = "warn"

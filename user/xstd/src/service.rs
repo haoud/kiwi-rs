@@ -1,30 +1,12 @@
 use crate::syscall::{self, SyscallCode};
 
-/// Errors that may occur during service registration.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ServiceRegisterError {
-    /// An unknown error occurred.
-    Unknown = 0,
-
-    /// An invalid name was provided. It could be due to an invalid pointer,
-    /// length, or the name not being valid UTF-8.
-    BadName = 1,
-
-    /// The service name is already taken by another service.
-    NameNotAvailable = 2,
-
-    /// The task is already registered as a service provider and cannot
-    /// be registered again.
-    TaskAlreadyRegistered = 3,
-}
-
-impl SyscallCode for ServiceRegisterError {
+impl SyscallCode for ::syscall::service::RegisterError {
     fn from_syscall_code(code: isize) -> Self {
         match -code {
-            1 => ServiceRegisterError::BadName,
-            2 => ServiceRegisterError::NameNotAvailable,
-            3 => ServiceRegisterError::TaskAlreadyRegistered,
-            _ => ServiceRegisterError::Unknown,
+            1 => ::syscall::service::RegisterError::BadName,
+            2 => ::syscall::service::RegisterError::NameNotAvailable,
+            3 => ::syscall::service::RegisterError::TaskAlreadyRegistered,
+            _ => ::syscall::service::RegisterError::Unknown,
         }
     }
 }
@@ -78,7 +60,7 @@ impl SyscallCode for ServiceConnectError {
 /// This function returns a [`ServiceRegisterError`] if the registration fails
 /// for any reason, such as an invalid name or if the name is already taken by
 /// another service.
-pub fn register(name: &str) -> Result<(), ServiceRegisterError> {
+pub fn register(name: &str) -> Result<(), ::syscall::service::RegisterError> {
     let ret;
     unsafe {
         core::arch::asm!("ecall",
@@ -91,7 +73,9 @@ pub fn register(name: &str) -> Result<(), ServiceRegisterError> {
     }
 
     if syscall::failed(ret) {
-        Err(ServiceRegisterError::from_syscall_code(ret as isize))
+        Err(::syscall::service::RegisterError::from_syscall_code(
+            ret as isize,
+        ))
     } else {
         Ok(())
     }

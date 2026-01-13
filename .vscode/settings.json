@@ -8,10 +8,12 @@
         "enabled": true
     },
     "rust-analyzer.linkedProjects": [
-        "kernel/Cargo.toml",
+        "crates/kiwi-seqlock/Cargo.toml",
+        "crates/kiwi-syscall/Cargo.toml",
         "user/init/Cargo.toml",
         "user/echo/Cargo.toml",
         "user/xstd/Cargo.toml",
+        "kernel/Cargo.toml",
     ],
     "makefile.configureOnOpen": false,
 }

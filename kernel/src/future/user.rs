@@ -1,9 +1,11 @@
 use super::yield_once;
-use crate::arch::{
-    self,
-    trap::{Resume, Trap},
+use crate::{
+    arch::{
+        self,
+        trap::{Resume, Trap},
+    },
+    config,
 };
-use config::THREAD_QUANTUM;
 use core::time::Duration;
 
 /// Thread exit status
@@ -21,7 +23,7 @@ pub enum Exit {
 pub async fn thread_loop(mut thread: arch::thread::Thread) {
     let exit = loop {
         // Set the next timer event
-        arch::timer::next_event(Duration::from_millis(THREAD_QUANTUM));
+        arch::timer::next_event(Duration::from_millis(config::THREAD_QUANTUM));
         let trap = arch::thread::execute(&mut thread);
         let resume = match trap {
             Trap::Exception => arch::trap::handle_exception(&mut thread),

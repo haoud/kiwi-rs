@@ -27,10 +27,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
-name = "config"
-version = "0.1.0"
-
-[[package]]
 name = "critical-section"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -194,9 +190,9 @@ dependencies = [
 
 [[package]]
 name = "intrusive-collections"
-version = "0.9.6"
+version = "0.9.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b694dc9f70c3bda874626d2aed13b780f137aab435f4e9814121955cf706122e"
+checksum = "189d0897e4cbe8c75efedf3502c18c887b05046e59d28404d4d8e46cbc4d1e86"
 dependencies = [
  "memoffset",
 ]
@@ -206,7 +202,6 @@ name = "kernel"
 version = "0.1.0"
 dependencies = [
  "bitflags",
- "config",
  "crossbeam",
  "elf",
  "fdt",
@@ -214,14 +209,29 @@ dependencies = [
  "hashbrown",
  "heapless",
  "intrusive-collections",
+ "kiwi-seqlock",
+ "kiwi-syscall",
  "log",
  "macros",
  "riscv",
  "sbi",
- "seqlock",
  "spin",
  "talc",
  "usize_cast",
+ "zerocopy",
+]
+
+[[package]]
+name = "kiwi-seqlock"
+version = "0.1.0"
+dependencies = [
+ "spin",
+]
+
+[[package]]
+name = "kiwi-syscall"
+version = "0.1.0"
+dependencies = [
  "zerocopy",
 ]
 
@@ -310,13 +320,6 @@ name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
-
-[[package]]
-name = "seqlock"
-version = "0.1.0"
-dependencies = [
- "spin",
-]
 
 [[package]]
 name = "spin"

@@ -8,16 +8,19 @@ intrusive-collections = { version = "0.9", default-features = false }
 crossbeam = { version = "0.8.4", default-features = false, features = ["alloc"] }
 futures = { version = "0.3", default-features = false, features = ["alloc"] }
 elf = { version = "0.8.0", default-features = false}
+
+syscall = { path = "../crates/kiwi-syscall", package = "kiwi-syscall" }
+
 usize_cast = { workspace = true }
 hashbrown = { workspace = true }
 heapless = { workspace = true }
 bitflags = { workspace = true }
 zerocopy = { workspace = true }
 seqlock = { workspace = true }
-config = { workspace = true }
 macros = { workspace = true }
 spin = { workspace = true }
 log = { workspace = true }
+
 talc = "4.4"
 
 [target.'cfg(target_arch = "riscv64")'.dependencies]
@@ -31,15 +34,12 @@ logging = []
 
 [workspace]
 members = [
-    "crates/config",
     "crates/macros",
-    "crates/seqlock",
 ]
 
 [workspace.dependencies]
 zerocopy = { version = "0.8", features = ["alloc", "derive"] }
-seqlock = { path = "crates/seqlock" }
-config = { path = "crates/config" }
+seqlock = { path = "../crates/kiwi-seqlock", package = "kiwi-seqlock" }
 macros = { path = "crates/macros" }
 usize_cast = "1.1.0"
 hashbrown = "0.16"
@@ -50,7 +50,6 @@ log = "0.4.21"
 
 [workspace.lints.rust]
 undocumented_unsafe_blocks = "warn"
-if_then_some_else_none = "warn"
 pedantic = "warn"
 all = "warn"
 

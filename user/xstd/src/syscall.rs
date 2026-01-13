@@ -1,17 +1,3 @@
-/// The syscall numbers used by the kernel.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum SyscallNumber {
-    Nop = 0,
-    TaskExit = 1,
-    TaskYield = 2,
-    ServiceRegister = 3,
-    ServiceUnregister = 4,
-    ServiceConnect = 5,
-    IpcSend = 6,
-    IpcReceive = 7,
-    IpcReply = 8,
-}
-
 /// A trait that help to convert syscall return codes into specific error
 /// types for better error handling.
 pub trait SyscallCode {

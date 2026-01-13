@@ -11,7 +11,7 @@
 //! was interleaved with a write, the reader will retry the read until it is
 //! consistent.
 //!
-//! # Unsoudness
+//! # Unsoundness
 //! Currently, the implementation of the `SeqLock` is unsound, because it uses
 //! an implementation that is not allowed in Rust. The implementation uses
 //! volatile reads and writes to the data structure. This is undefined behavior

@@ -1,132 +1,24 @@
-use zerocopy::{FromBytes, IntoBytes};
-
 use crate::{
     arch::{thread::Thread, trap::Resume},
     future, ipc,
     user::{object::Object, ptr::Pointer, syscall::SyscallReturnValue},
 };
 
-/// Maximum payload size for IPC messages.
-const MAX_PAYLOAD_SIZE: usize = 256;
-
-/// Represents an IPC message used by syscalls to reduce the number of
-/// parameters passed. We use the C representation to ensure a predictable
-/// layout compatible with the kernel.
-#[derive(FromBytes, IntoBytes)]
-#[repr(C)]
-pub struct Message {
-    /// The sender task ID. If the message is sent from user space, this
-    /// field is ignored and will be filled in by the kernel.
-    pub sender: usize,
-
-    /// The receiver task ID. If the message is sent to user space, this
-    /// field is ignored and will be filled in by the kernel.
-    pub receiver: usize,
-
-    /// The message kind.
-    pub kind: usize,
-
-    /// The length of the payload.
-    pub payload_len: usize,
-
-    /// The payload data.
-    pub payload: [u8; MAX_PAYLOAD_SIZE],
-}
-
-/// Represents an IPC reply used by syscalls to reduce the number of
-/// parameters passed. We use the C representation to ensure a predictable
-/// layout compatible with the kernel.
-#[derive(FromBytes, IntoBytes)]
-#[repr(C)]
-pub struct Reply {
-    /// The status of the reply.
-    pub status: usize,
-
-    /// The length of the payload.
-    pub payload_len: usize,
-
-    /// The payload data.
-    pub payload: [u8; MAX_PAYLOAD_SIZE],
-}
-
-/// Errors that can occur when sending an IPC message.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IpcSendError {
-    /// The destination is invalid.
-    InvalidDestination = 1,
-
-    /// The message is invalid.
-    BadMessage = 2,
-
-    /// The payload size exceeds the maximum allowed size.
-    PayloadTooLarge = 3,
-}
-
-impl From<ipc::message::SendError> for IpcSendError {
+impl From<ipc::message::SendError> for syscall::ipc::SendError {
     fn from(error: ipc::message::SendError) -> Self {
         match error {
-            ipc::message::SendError::PayloadTooLarge => IpcSendError::PayloadTooLarge,
+            ipc::message::SendError::PayloadTooLarge => syscall::ipc::SendError::PayloadTooLarge,
         }
     }
 }
 
-impl From<IpcSendError> for isize {
-    fn from(error: IpcSendError) -> Self {
-        match error {
-            IpcSendError::InvalidDestination => 1,
-            IpcSendError::BadMessage => 2,
-            IpcSendError::PayloadTooLarge => 3,
-        }
-    }
-}
-
-/// Errors that can occur when receiving an IPC message.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IpcReceiveError {
-    /// The buffer pointer is invalid.
-    BadBuffer = 1,
-}
-
-impl From<IpcReceiveError> for isize {
-    fn from(error: IpcReceiveError) -> Self {
-        match error {
-            IpcReceiveError::BadBuffer => 1,
-        }
-    }
-}
-
-/// Errors that can occur when replying to an IPC message.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum IpcReplyError {
-    /// The destination is invalid.
-    InvalidDestination = 1,
-
-    /// The message is invalid.
-    BadMessage = 2,
-
-    /// The payload size exceeds the maximum allowed size.
-    PayloadTooLarge = 3,
-
-    /// The task is not waiting for a reply from the sender.
-    NotWaitingForReply = 4,
-}
-
-impl From<ipc::message::ReplyError> for IpcReplyError {
+impl From<ipc::message::ReplyError> for syscall::ipc::ReplyError {
     fn from(error: ipc::message::ReplyError) -> Self {
         match error {
-            ipc::message::ReplyError::PayloadTooLarge => IpcReplyError::PayloadTooLarge,
-            ipc::message::ReplyError::NotWaitingForReply => IpcReplyError::NotWaitingForReply,
-        }
-    }
-}
-
-impl From<IpcReplyError> for isize {
-    fn from(error: IpcReplyError) -> Self {
-        match error {
-            IpcReplyError::InvalidDestination => 1,
-            IpcReplyError::BadMessage => 2,
-            IpcReplyError::PayloadTooLarge => 3,
-            IpcReplyError::NotWaitingForReply => 4,
+            ipc::message::ReplyError::PayloadTooLarge => syscall::ipc::ReplyError::PayloadTooLarge,
+            ipc::message::ReplyError::NotWaitingForReply => {
+                syscall::ipc::ReplyError::NotWaitingForReply
+            }
         }
     }
 }
@@ -148,17 +40,17 @@ impl From<IpcReplyError> for isize {
 /// should never happen since this function is called from a task context.
 pub async fn send(
     thread: &mut Thread,
-    message_ptr: Pointer<Message>,
-    reply_ptr: Pointer<Reply>,
-) -> Result<SyscallReturnValue, IpcSendError> {
+    message_ptr: Pointer<syscall::ipc::Message>,
+    reply_ptr: Pointer<syscall::ipc::Reply>,
+) -> Result<SyscallReturnValue, syscall::ipc::SendError> {
     // Read the message from user space and get the current task ID.
-    let message = unsafe { Object::<Message>::new(message_ptr) };
+    let message = unsafe { Object::<syscall::ipc::Message>::new(message_ptr) };
     let id = future::executor::current_task_id().unwrap();
 
     // Validate the payload size, ensuring it does not exceed the maximum
     // allowed size to avoid buffer overflows.
-    if message.payload_len > MAX_PAYLOAD_SIZE {
-        return Err(IpcSendError::PayloadTooLarge);
+    if message.payload_len > syscall::ipc::MAX_PAYLOAD_SIZE {
+        return Err(syscall::ipc::SendError::PayloadTooLarge);
     }
 
     // Send the message and wait for the reply.
@@ -171,11 +63,11 @@ pub async fn send(
     .await?;
 
     // Construct the reply to be sent back to user space.
-    let reply = Reply {
+    let reply = syscall::ipc::Reply {
         status: reply.operation,
         payload_len: reply.payload_len,
         payload: {
-            let mut payload = [0u8; MAX_PAYLOAD_SIZE];
+            let mut payload = [0u8; syscall::ipc::MAX_PAYLOAD_SIZE];
             payload[..reply.payload_len].copy_from_slice(&reply.payload[..reply.payload_len]);
             payload
         },
@@ -214,19 +106,19 @@ pub async fn send(
 /// should never happen since this function is called from a task context.
 pub async fn receive(
     thread: &mut Thread,
-    message_ptr: Pointer<Message>,
-) -> Result<SyscallReturnValue, IpcReceiveError> {
+    message_ptr: Pointer<syscall::ipc::Message>,
+) -> Result<SyscallReturnValue, syscall::ipc::ReceiveError> {
     let id = future::executor::current_task_id().unwrap();
     let received = ipc::message::receive(usize::from(id)).await;
 
     // Construct the message to be sent back to user space.
-    let message = Message {
+    let message = syscall::ipc::Message {
         sender: received.sender,
         receiver: received.receiver,
         kind: received.operation,
         payload_len: received.payload_len,
         payload: {
-            let mut payload = [0u8; MAX_PAYLOAD_SIZE];
+            let mut payload = [0u8; syscall::ipc::MAX_PAYLOAD_SIZE];
             payload[..received.payload_len]
                 .copy_from_slice(&received.payload[..received.payload_len]);
             payload
@@ -262,9 +154,12 @@ pub async fn receive(
 /// # Panics
 /// This function may panic if the current task ID cannot be retrieved. This
 /// should never happen since this function is called from a task context.
-pub fn reply(to: usize, reply: Pointer<Reply>) -> Result<SyscallReturnValue, IpcReplyError> {
+pub fn reply(
+    to: usize,
+    reply: Pointer<syscall::ipc::Reply>,
+) -> Result<SyscallReturnValue, syscall::ipc::ReplyError> {
     // Read the reply from user space and get the current task ID.
-    let reply = unsafe { Object::<Reply>::new(reply) };
+    let reply = unsafe { Object::<syscall::ipc::Reply>::new(reply) };
     let id = future::executor::current_task_id().unwrap();
 
     // Reply to the message. This is a synchronous operation that is guaranteed

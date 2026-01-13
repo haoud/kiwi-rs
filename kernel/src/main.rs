@@ -9,6 +9,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 pub mod arch;
+pub mod config;
 pub mod future;
 pub mod ipc;
 pub mod mm;
