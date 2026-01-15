@@ -1,22 +1,25 @@
 use core::ops::{Deref, DerefMut};
 use zerocopy::{FromBytes, IntoBytes};
 
-use crate::user::{self, ptr::Pointer};
+use crate::{
+    arch::thread::Thread,
+    user::{self, ptr::Pointer},
+};
 
 /// An object that is stored in the userland address space. It is a structure
 /// that holds a pointer to the object in the userland address space and a copy
 /// of the object in the kernel address space. This allows us to read and write
 /// the object in the userland address space safely.
 #[derive(Debug)]
-pub struct Object<T: FromBytes + IntoBytes> {
+pub struct Object<'a, T: FromBytes + IntoBytes> {
     /// A pointer to the object in the userland address space.
-    ptr: Pointer<T>,
+    ptr: Pointer<'a, T>,
 
     /// A copy of the object in the kernel address space.
     inner: T,
 }
 
-impl<T: FromBytes + IntoBytes> Object<T> {
+impl<'a, T: FromBytes + IntoBytes> Object<'a, T> {
     /// Create an `Object` from the given pointer that resides in the userland
     /// memory. This function will read the object from the userland memory and
     /// store it in the `Object` struct.
@@ -29,7 +32,7 @@ impl<T: FromBytes + IntoBytes> Object<T> {
     /// object in the kernel: otherwise, this function will cause undefined
     /// behavior.
     #[must_use]
-    pub unsafe fn new(ptr: Pointer<T>) -> Self {
+    pub unsafe fn new(ptr: Pointer<'a, T>) -> Self {
         Self {
             inner: Self::read(&ptr),
             ptr,
@@ -49,8 +52,8 @@ impl<T: FromBytes + IntoBytes> Object<T> {
     /// object in userland memory has exactly the same layout as the object in
     /// the kernel: otherwise, this function will cause undefined behavior.
     #[must_use]
-    pub unsafe fn from_raw(ptr: *const T) -> Option<Self> {
-        let user_ptr = Pointer::new(ptr.cast_mut())?;
+    pub unsafe fn from_raw(thread: &'a Thread, ptr: *const T) -> Option<Self> {
+        let user_ptr = Pointer::new(thread, ptr.cast_mut())?;
         Some(Self::new(user_ptr))
     }
 
@@ -65,7 +68,7 @@ impl<T: FromBytes + IntoBytes> Object<T> {
     /// in userland memory has exactly the same layout as the object in the
     /// kernel: otherwise, this function will cause undefined behavior.
     pub unsafe fn update(&mut self) {
-        user::op::write(&raw const self.inner, self.ptr.inner());
+        user::op::write(self.ptr.thread(), &raw const self.inner, self.ptr.inner());
     }
 
     /// Read the object from the userland memory and return it. It return a
@@ -82,7 +85,7 @@ impl<T: FromBytes + IntoBytes> Object<T> {
     #[must_use]
     pub unsafe fn read(src: &Pointer<T>) -> T {
         let mut dst = core::mem::MaybeUninit::<T>::uninit();
-        user::op::read(src.inner(), dst.as_mut_ptr());
+        user::op::read(src.thread(), src.inner(), dst.as_mut_ptr());
         dst.assume_init()
     }
 
@@ -99,18 +102,18 @@ impl<T: FromBytes + IntoBytes> Object<T> {
     /// userland memory has exactly the same layout as the object in the
     /// kernel: otherwise, this function will cause undefined behavior.
     pub unsafe fn write(dst: &Pointer<T>, src: &T) {
-        user::op::write(src, dst.inner());
+        user::op::write(dst.thread(), src, dst.inner());
     }
 }
 
-impl<T: FromBytes + IntoBytes> Deref for Object<T> {
+impl<T: FromBytes + IntoBytes> Deref for Object<'_, T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
-impl<T: FromBytes + IntoBytes> DerefMut for Object<T> {
+impl<T: FromBytes + IntoBytes> DerefMut for Object<'_, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }

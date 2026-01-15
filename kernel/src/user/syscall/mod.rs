@@ -46,7 +46,7 @@ pub async fn handle_syscall(thread: &mut arch::thread::Thread) -> Resume {
         SyscallOp::ServiceRegister => {
             let name_ptr = core::ptr::with_exposed_provenance_mut::<u8>(args[0]);
             let name_len = args[1];
-            syscall::service::register(name_ptr, name_len).map_err(isize::from)
+            syscall::service::register(thread, name_ptr, name_len).map_err(isize::from)
         }
         SyscallOp::ServiceUnregister => {
             // Currently, no arguments are needed for unregistration since
@@ -56,20 +56,20 @@ pub async fn handle_syscall(thread: &mut arch::thread::Thread) -> Resume {
         SyscallOp::ServiceConnect => {
             let name_ptr = core::ptr::with_exposed_provenance_mut::<u8>(args[0]);
             let name_len = args[1];
-            syscall::service::connect(name_ptr, name_len).map_err(isize::from)
+            syscall::service::connect(thread, name_ptr, name_len).map_err(isize::from)
         }
         SyscallOp::IpcSend => {
             let message_ptr =
                 core::ptr::with_exposed_provenance::<::syscall::ipc::Message>(args[0]);
             let reply_ptr =
                 core::ptr::with_exposed_provenance_mut::<::syscall::ipc::Reply>(args[1]);
-            let message_ptr = Pointer::new(message_ptr.cast_mut())
+            let message_ptr = Pointer::new(thread, message_ptr.cast_mut())
                 .ok_or(isize::from(::syscall::ipc::SendError::BadMessage));
-            let reply_ptr =
-                Pointer::new(reply_ptr).ok_or(isize::from(::syscall::ipc::SendError::BadMessage));
+            let reply_ptr = Pointer::new(thread, reply_ptr)
+                .ok_or(isize::from(::syscall::ipc::SendError::BadMessage));
 
             if let (Ok(msg_ptr), Ok(rpl_ptr)) = (message_ptr, reply_ptr) {
-                syscall::ipc::send(thread, msg_ptr, rpl_ptr)
+                syscall::ipc::send(msg_ptr, rpl_ptr)
                     .await
                     .map_err(isize::from)
             } else {
@@ -79,12 +79,10 @@ pub async fn handle_syscall(thread: &mut arch::thread::Thread) -> Resume {
         SyscallOp::IpcReceive => {
             let message_ptr =
                 core::ptr::with_exposed_provenance_mut::<::syscall::ipc::Message>(args[0]);
-            let message_ptr = Pointer::new(message_ptr)
+            let message_ptr = Pointer::new(thread, message_ptr)
                 .ok_or(isize::from(::syscall::ipc::ReceiveError::BadBuffer));
             if let Ok(ptr) = message_ptr {
-                syscall::ipc::receive(thread, ptr)
-                    .await
-                    .map_err(isize::from)
+                syscall::ipc::receive(ptr).await.map_err(isize::from)
             } else {
                 Err(isize::from(::syscall::ipc::ReceiveError::BadBuffer))
             }
@@ -92,7 +90,7 @@ pub async fn handle_syscall(thread: &mut arch::thread::Thread) -> Resume {
         SyscallOp::IpcReply => {
             let to = args[0];
             let reply_ptr = core::ptr::with_exposed_provenance::<::syscall::ipc::Reply>(args[1]);
-            let reply_ptr = Pointer::new(reply_ptr.cast_mut())
+            let reply_ptr = Pointer::new(thread, reply_ptr.cast_mut())
                 .ok_or(isize::from(::syscall::ipc::ReplyError::BadMessage));
             if let Ok(ptr) = reply_ptr {
                 syscall::ipc::reply(to, ptr).map_err(isize::from)

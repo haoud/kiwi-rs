@@ -1,7 +1,7 @@
 use core::sync::atomic::{AtomicBool, Ordering};
 use zerocopy::{FromBytes, IntoBytes};
 
-use crate::arch;
+use crate::arch::{self, thread::Thread};
 
 /// The `USER_OPERATION` variable is used to signal if the current CPU is
 /// performing a user operation or not. This is useful to not panic when a
@@ -29,7 +29,8 @@ pub fn in_operation() -> bool {
 /// that the pointer is valid and does not overlap with kernel space. However,
 /// the caller does not need to ensure that the user memory is readable, as
 /// this function will handle page faults and kill the process if necessary.
-pub unsafe fn copy_from<T: FromBytes>(src: *const T, dst: *mut T, len: usize) {
+pub unsafe fn copy_from<T: FromBytes>(thread: &Thread, src: *const T, dst: *mut T, len: usize) {
+    thread.root_table().set_current();
     perform_user_operation(|| {
         core::ptr::copy_nonoverlapping(src, dst, len);
     });
@@ -46,7 +47,8 @@ pub unsafe fn copy_from<T: FromBytes>(src: *const T, dst: *mut T, len: usize) {
 /// that the pointer is valid and does not overlap with kernel space. However,
 /// the caller does not need to ensure that the user memory is writable, as
 /// this function will handle page faults and kill the process if necessary.
-pub unsafe fn copy_to<T: IntoBytes>(src: *const T, dst: *mut T, len: usize) {
+pub unsafe fn copy_to<T: IntoBytes>(thread: &Thread, src: *const T, dst: *mut T, len: usize) {
+    thread.root_table().set_current();
     perform_user_operation(|| {
         core::ptr::copy_nonoverlapping(src, dst, len);
     });
@@ -63,8 +65,8 @@ pub unsafe fn copy_to<T: IntoBytes>(src: *const T, dst: *mut T, len: usize) {
 /// that the pointer is valid and does not overlap with kernel space. However,
 /// the caller does not need to ensure that the memory is readable, as this
 /// function will handle page faults and kill the process if necessary.
-pub unsafe fn read<T: FromBytes>(src: *const T, dst: *mut T) {
-    copy_from(src, dst, 1);
+pub unsafe fn read<T: FromBytes>(thread: &Thread, src: *const T, dst: *mut T) {
+    copy_from(thread, src, dst, 1);
 }
 
 /// Write the given value to the given address. This function is implemented by
@@ -78,8 +80,8 @@ pub unsafe fn read<T: FromBytes>(src: *const T, dst: *mut T) {
 /// the pointer is valid and does not overlap with kernel space. However, the
 /// caller does not need to ensure that the memory is writable, as this function
 /// will handle page faults and kill the task if the access is invalid.
-pub unsafe fn write<T: IntoBytes>(src: *const T, dst: *mut T) {
-    copy_to(src, dst, 1);
+pub unsafe fn write<T: IntoBytes>(thread: &Thread, src: *const T, dst: *mut T) {
+    copy_to(thread, src, dst, 1);
 }
 
 /// Signal that the current CPU has started an user operation. This will enable

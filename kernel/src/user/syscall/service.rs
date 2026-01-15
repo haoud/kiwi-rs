@@ -1,5 +1,5 @@
 use crate::{
-    arch::trap::Resume,
+    arch::{thread::Thread, trap::Resume},
     future, ipc,
     user::{self, syscall::SyscallReturnValue},
 };
@@ -31,10 +31,11 @@ impl From<ipc::service::ServiceRegisterError> for ::syscall::service::RegisterEr
 ///   never happen since service registration must be done within a task
 ///   context).
 pub fn register(
+    thread: &Thread,
     name_ptr: *mut u8,
     name_len: usize,
 ) -> Result<SyscallReturnValue, ::syscall::service::RegisterError> {
-    let name = user::string::String::new(name_ptr, name_len)
+    let name = user::string::String::new(thread, name_ptr, name_len)
         .ok_or(::syscall::service::RegisterError::BadName)?
         .fetch()
         .map_err(|_| ::syscall::service::RegisterError::BadName)?;
@@ -73,10 +74,11 @@ pub fn unregister() -> Result<SyscallReturnValue, ::syscall::service::Unregister
 /// sense, but rather a lookup of the service ID, no actual connection state
 /// is maintained, and thus no disconnection is necessary.
 pub fn connect(
+    thread: &Thread,
     name_ptr: *mut u8,
     name_len: usize,
 ) -> Result<SyscallReturnValue, ::syscall::service::ConnectionError> {
-    let name = user::string::String::new(name_ptr, name_len)
+    let name = user::string::String::new(thread, name_ptr, name_len)
         .ok_or(::syscall::service::ConnectionError::BadName)?
         .fetch()
         .map_err(|_| ::syscall::service::ConnectionError::BadName)?;

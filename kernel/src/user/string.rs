@@ -1,4 +1,7 @@
-use crate::user::{self, ptr::Pointer};
+use crate::{
+    arch::thread::Thread,
+    user::{self, ptr::Pointer},
+};
 
 /// A string that is stored in the userland address space. It is a structure
 /// that are created by the rust syscall wrapper and passed to the kernel, so
@@ -19,12 +22,12 @@ pub struct RawString {
 /// convenient to use in the kernel as it make some guarantees about the
 /// pointer that the [`RawString`] structure cannot make.
 #[derive(Debug)]
-pub struct String {
-    data: Pointer<u8>,
+pub struct String<'a> {
+    data: Pointer<'a, u8>,
     len: usize,
 }
 
-impl String {
+impl<'a> String<'a> {
     /// The maximum length of a string that can be fetched from the userland
     /// address space. This limit is imposed to prevent the kernel from trying
     /// to fetch excessively long strings that could lead to denial of service
@@ -40,8 +43,8 @@ impl String {
     /// If the pointer is invalid or if the whole string does not reside in
     /// the userland address space, then this function will return `None`.
     #[must_use]
-    pub fn new(ptr: *mut u8, len: usize) -> Option<Self> {
-        let data = Pointer::array(ptr, len)?;
+    pub fn new(thread: &'a Thread, ptr: *mut u8, len: usize) -> Option<Self> {
+        let data = Pointer::array(thread, ptr, len)?;
         Some(Self { data, len })
     }
 
@@ -54,8 +57,8 @@ impl String {
     /// whole string does not reside in the userland address space, then this
     /// function will return `None`.
     #[must_use]
-    pub fn from_raw(str: &RawString) -> Option<Self> {
-        let data = Pointer::array(str.data, str.len)?;
+    pub fn from_raw(thread: &'a Thread, str: &RawString) -> Option<Self> {
+        let data = Pointer::array(thread, str.data, str.len)?;
         Some(Self { data, len: str.len })
     }
 
@@ -91,7 +94,7 @@ impl String {
         // responsability of the user program. We also set the length of the
         // vector after the copy to the correct length.
         unsafe {
-            user::op::copy_from(src, dst, len);
+            user::op::copy_from(self.data.thread(), src, dst, len);
             vector.set_len(len);
         }
 

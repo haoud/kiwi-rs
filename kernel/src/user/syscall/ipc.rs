@@ -1,5 +1,5 @@
 use crate::{
-    arch::{thread::Thread, trap::Resume},
+    arch::trap::Resume,
     future, ipc,
     user::{object::Object, ptr::Pointer, syscall::SyscallReturnValue},
 };
@@ -39,9 +39,8 @@ impl From<ipc::message::ReplyError> for syscall::ipc::ReplyError {
 /// This function may panic if the current task ID cannot be retrieved. This
 /// should never happen since this function is called from a task context.
 pub async fn send(
-    thread: &mut Thread,
-    message_ptr: Pointer<syscall::ipc::Message>,
-    reply_ptr: Pointer<syscall::ipc::Reply>,
+    message_ptr: Pointer<'_, syscall::ipc::Message>,
+    reply_ptr: Pointer<'_, syscall::ipc::Reply>,
 ) -> Result<SyscallReturnValue, syscall::ipc::SendError> {
     // Read the message from user space and get the current task ID.
     let message = unsafe { Object::<syscall::ipc::Message>::new(message_ptr) };
@@ -75,11 +74,8 @@ pub async fn send(
 
     // Write the reply back to user space.
     // SAFETY: This is safe because we have verified that the pointer is valid
-    // when creating the `Pointer<Reply>` in the syscall handler, and we
-    // ensure that we are writing to the correct user address space by setting
-    // the root table of the current thread as current before writing.
+    // when creating the `Pointer<Reply>` in the syscall handler
     unsafe {
-        thread.root_table().set_current();
         Object::write(&reply_ptr, &reply);
     }
 
@@ -105,8 +101,7 @@ pub async fn send(
 /// This function may panic if the current task ID cannot be retrieved. This
 /// should never happen since this function is called from a task context.
 pub async fn receive(
-    thread: &mut Thread,
-    message_ptr: Pointer<syscall::ipc::Message>,
+    message_ptr: Pointer<'_, syscall::ipc::Message>,
 ) -> Result<SyscallReturnValue, syscall::ipc::ReceiveError> {
     let id = future::executor::current_task_id().unwrap();
     let received = ipc::message::receive(usize::from(id)).await;
@@ -127,11 +122,8 @@ pub async fn receive(
 
     // Write the message back to user space.
     // SAFETY: This is safe because we have verified that the pointer is valid
-    // when creating the `Pointer<Message>` in the syscall handler, and we
-    // ensure that we are writing to the correct user address space by setting
-    // the root table of the current thread as current before writing.
+    // when creating the `Pointer<Message>`
     unsafe {
-        thread.root_table().set_current();
         Object::write(&message_ptr, &message);
     }
 
