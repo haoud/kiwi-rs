@@ -21,8 +21,7 @@ static EXECUTOR: spin::Once<Executor> = spin::Once::new();
 /// identifier. If no task is running, this will be `None`.
 static CURRENT_TASK_ID: spin::Mutex<Option<task::Identifier>> = spin::Mutex::new(None);
 
-/// The executor is responsible to run all user-space tasks. It behaves like
-/// a simple First-In-First-Out (FIFO) cooperative scheduler.
+/// The executor is responsible to run all user-space tasks.
 ///
 /// # A cooperative scheduler for user-space tasks ?
 /// You may wonder why we use a cooperative scheduler instead of a preemptive
@@ -44,8 +43,15 @@ pub struct Executor<'a> {
     /// executor...
     tasks: spin::Mutex<BTreeMap<task::Identifier, Task<'a>>>,
 
-    /// The queue of tasks identifier that are ready to be executed.
-    ready: ArrayQueue<task::Identifier>,
+    /// The queue of tasks that are ready to be executed. Tasks are sorted
+    /// by their virtual runtime: The task with the lowest virtual runtime is
+    /// at the front of the queue and will be executed next.
+    ready_queue: spin::Mutex<BTreeMap<usize, task::Identifier>>,
+
+    /// The queue of tasks identifier that are ready to be executed, but was
+    /// not yet inserted in the `ready_queue` map. This is used to avoid
+    /// locking the `ready_queue` map for every task wake-up.
+    ready_ids: ArrayQueue<task::Identifier>,
 }
 
 impl Executor<'_> {
@@ -55,14 +61,9 @@ impl Executor<'_> {
     pub fn new() -> Self {
         Self {
             tasks: spin::Mutex::new(BTreeMap::new()),
-            ready: ArrayQueue::new(usize::from(config::MAX_TASKS)),
+            ready_queue: spin::Mutex::new(BTreeMap::new()),
+            ready_ids: ArrayQueue::new(usize::from(config::MAX_TASKS)),
         }
-    }
-
-    /// Return true if there are tasks ready to run.
-    #[must_use]
-    pub fn tasks_ready_to_run(&self) -> bool {
-        !self.ready.is_empty()
     }
 
     /// Run the next task that is ready to run. If there are no tasks ready
@@ -74,8 +75,10 @@ impl Executor<'_> {
     /// into a u64 that can handle up to 2^64 - 1 tasks and cannot be
     /// overflowed in a reasonable time.
     pub fn run_once(&self) {
+        self.process_ready_ids();
+
         // Get the next task to run.
-        if let Some(id) = self.ready.pop() {
+        if let Some((_, id)) = self.ready_queue.lock().pop_first() {
             // If the task is not found in the map, this means that the
             // task has completed and was removed from the map. Therefore,
             // we can safely ignore it.
@@ -86,6 +89,8 @@ impl Executor<'_> {
 
             // Set the current task ID to the task that is being run now.
             set_current_task_id(id);
+
+            // TODO: Measure the time spent in the task for accounting purposes
 
             match task.poll() {
                 core::task::Poll::Ready(()) => {
@@ -107,10 +112,55 @@ impl Executor<'_> {
         }
     }
 
+    /// Process all the ready task identifiers and insert them into the
+    /// ready queue, sorted by their virtual runtime.
+    fn process_ready_ids(&self) {
+        let mut ready_queue = self.ready_queue.lock();
+        let lowest_vruntime = ready_queue.keys().next().copied().unwrap_or(0);
+        let mut tasks = self.tasks.lock();
+
+        while let Some(id) = self.ready_ids.pop() {
+            if let Some(task) = tasks.get_mut(&id) {
+                // Insert the task into the ready queue, using its virtual
+                // runtime as the key. We ensure that the virtual runtime
+                // is at least the lowest virtual runtime of all ready
+                // tasks to avoid the case where a task has slept for a
+                // long time and has a very low virtual runtime that would
+                // starve all other tasks.
+                // TODO: Since the task has slept for a long time, maybe we
+                // should give it a small boost ? This may help interactive
+                // tasks to be more responsive.
+                let mut vruntime = task.vruntime().max(lowest_vruntime);
+
+                // Increment the vruntime slightly if there is already a task
+                // with the same vruntime in the ready queue to avoid
+                // duplicated keys in the BTreeMap that would overwrite the
+                // previous task stored with the same vruntime. This should not
+                // happen often, and even if it does, the increment is very
+                // small (1 nanosecond) and should not impact the scheduling
+                // fairness.
+                while ready_queue.contains_key(&vruntime) {
+                    vruntime += 1;
+                }
+
+                ready_queue.insert(vruntime, id);
+                task.set_vruntime(vruntime);
+            } else {
+                log::warn!("Task #{:?} not found in tasks map", usize::from(id));
+            }
+        }
+    }
+
+    /// Return true if there are tasks ready to run.
+    #[must_use]
+    pub fn tasks_ready_to_run(&self) -> bool {
+        !self.ready_queue.lock().is_empty() || !self.ready_ids.is_empty()
+    }
+
     /// Return a reference to the ready queue.
     #[must_use]
-    pub const fn ready_queue(&self) -> &ArrayQueue<task::Identifier> {
-        &self.ready
+    pub const fn ready_ids(&self) -> &ArrayQueue<task::Identifier> {
+        &self.ready_ids
     }
 }
 
@@ -138,7 +188,20 @@ pub fn current_task_id() -> Option<task::Identifier> {
 /// Panics if the executor is not initialized (i.e. `setup` was not called).
 pub fn spawn(thread: arch::thread::Thread) {
     let executor = EXECUTOR.get().expect("Executor not initialized");
-    let task = Task::new(executor, Box::pin(thread_loop(thread)));
+
+    // Compute the virtual runtime of the new task. We take the lowest
+    // virtual runtime of all ready tasks to ensure that the new task does
+    // not starve other tasks since they will all have a higher virtual
+    // runtime. If there are no ready tasks, we set the virtual runtime to 0.
+    let vruntime = executor
+        .ready_queue
+        .lock()
+        .keys()
+        .next()
+        .copied()
+        .unwrap_or(0);
+
+    let task = Task::new(executor, Box::pin(thread_loop(thread)), vruntime);
     let id = task.id();
 
     // Insert the task into the tasks map. If the task identifier already
@@ -146,7 +209,7 @@ pub fn spawn(thread: arch::thread::Thread) {
     // This should never happen because the task identifier is unique, and
     // is a serious bug that must be fixed.
     assert!(executor.tasks.lock().insert(id, task).is_none());
-    executor.ready.push(id).expect("Ready queue full");
+    executor.ready_ids.push(id).expect("Ready queue full");
     log::trace!("Task {:?} spawned", usize::from(id));
 }
 

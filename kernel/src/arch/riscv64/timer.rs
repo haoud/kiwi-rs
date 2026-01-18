@@ -63,3 +63,9 @@ pub fn internal_frequency() -> u64 {
 pub fn internal_tick() -> u64 {
     INTERNAL_TICK.read()
 }
+
+/// Get the current time since the system booted, in internal ticks.
+#[must_use]
+pub fn current_time_ticks() -> u64 {
+    riscv::register::time::read64()
+}
