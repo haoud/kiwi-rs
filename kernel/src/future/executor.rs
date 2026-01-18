@@ -3,6 +3,7 @@ use crate::future::task::{self, Task};
 use crate::{arch, future::user::thread_loop};
 use alloc::boxed::Box;
 use alloc::collections::BTreeMap;
+use core::sync::atomic::{AtomicU64, Ordering};
 use crossbeam::queue::ArrayQueue;
 
 /// The global executor instance, used to run all user-space tasks. This
@@ -14,6 +15,11 @@ use crossbeam::queue::ArrayQueue;
 /// kernel stack per core. This is possible because a future will compile to
 /// a state machine that can be paused and resumed at specific points.
 static EXECUTOR: spin::Once<Executor> = spin::Once::new();
+
+/// The global poll generation counter. This is used to track the number
+/// of times the executor has polled tasks. This can be useful if a task
+/// wants to know if it has yielded since the last time it checked.
+static POLL_GENERATION: ExecutorGeneration = ExecutorGeneration::new();
 
 /// The identifier of the currently running task on this core. This is
 /// used to identify the task that is currently running on this core.
@@ -46,7 +52,7 @@ pub struct Executor<'a> {
     /// The queue of tasks that are ready to be executed. Tasks are sorted
     /// by their virtual runtime: The task with the lowest virtual runtime is
     /// at the front of the queue and will be executed next.
-    ready_queue: spin::Mutex<BTreeMap<usize, task::Identifier>>,
+    ready_queue: spin::Mutex<BTreeMap<u64, task::Identifier>>,
 
     /// The queue of tasks identifier that are ready to be executed, but was
     /// not yet inserted in the `ready_queue` map. This is used to avoid
@@ -107,7 +113,10 @@ impl Executor<'_> {
                 }
             }
 
-            // Clear the current task ID because no task is running now.
+            // Clear the current task ID because no task is running now and
+            // increment the poll generation to indicate that we have polled
+            // one more task.
+            POLL_GENERATION.increment();
             clear_current_task_id();
         }
     }
@@ -170,6 +179,45 @@ impl Default for Executor<'_> {
     }
 }
 
+/// An opaque generation counter for the executor. This is used to track the
+/// number of times the executor has polled tasks. This can be useful if a task
+/// wants to know if it has yielded since the last time it checked, and is
+/// heavily used in the `thread_loop` future.
+#[derive(Debug)]
+pub struct ExecutorGeneration(AtomicU64);
+
+impl ExecutorGeneration {
+    /// Create a new generation counter initialized to 0.
+    #[must_use]
+    const fn new() -> Self {
+        Self(AtomicU64::new(0))
+    }
+
+    /// Increment the generation counter.
+    fn increment(&self) {
+        self.0.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Get the current generation value.
+    fn get(&self) -> u64 {
+        self.0.load(Ordering::Relaxed)
+    }
+}
+
+impl From<u64> for ExecutorGeneration {
+    fn from(value: u64) -> Self {
+        Self(AtomicU64::new(value))
+    }
+}
+
+impl PartialEq for ExecutorGeneration {
+    fn eq(&self, other: &Self) -> bool {
+        self.get() == other.get()
+    }
+}
+
+impl Eq for ExecutorGeneration {}
+
 /// Setup the global executor instance.
 pub fn setup() {
     log::info!("Setting up the kernel executor");
@@ -228,6 +276,19 @@ pub fn run() -> ! {
             arch::cpu::relax();
         }
     }
+}
+
+/// Return the current poll generation of the executor.
+#[must_use]
+pub fn poll_generation() -> ExecutorGeneration {
+    ExecutorGeneration::from(POLL_GENERATION.get())
+}
+
+/// Return true if the executor has polled a task since the given generation,
+/// indicating that the task has yielded, and false otherwise.
+#[must_use]
+pub fn has_yielded(since: &ExecutorGeneration) -> bool {
+    POLL_GENERATION.get() != since.get()
 }
 
 /// Set the identifier of the currently running task on this core.

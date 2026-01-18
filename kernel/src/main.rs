@@ -13,6 +13,7 @@ pub mod config;
 pub mod future;
 pub mod ipc;
 pub mod mm;
+pub mod time;
 pub mod user;
 pub mod utils;
 

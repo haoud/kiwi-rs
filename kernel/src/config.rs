@@ -1,3 +1,5 @@
+use core::time::Duration;
+
 /// The maximum number of tasks that can be created. The kernel will use this
 /// constant to allocate memory for the task control blocks and other data
 /// during initialization. Diminishing this value will reduce the memory usage
@@ -31,4 +33,4 @@ pub const KERNEL_STACK_SIZE: usize = 4096 * 4;
 /// overhead for most workloads. However, this value may need to be adjusted
 /// based on the specific requirements of the system and the nature of the tasks
 /// being run.
-pub const THREAD_MAX_RUN_DURATION: u64 = 25;
+pub const THREAD_MAX_RUN_DURATION: Duration = Duration::from_millis(25);
