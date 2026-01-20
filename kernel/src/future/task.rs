@@ -2,7 +2,7 @@ use crate::{
     future::{executor::Executor, waker::Waker},
     time,
 };
-use alloc::boxed::Box;
+use alloc::{boxed::Box, sync::Arc};
 use core::{
     future::Future,
     pin::Pin,
@@ -25,7 +25,7 @@ pub struct Task<'a> {
     vruntime: u64,
 
     /// The waker of the task.
-    waker: Waker<'a>,
+    waker: Arc<Waker>,
 
     /// The identifier of the task.
     id: Identifier,
@@ -39,7 +39,7 @@ impl<'a> Task<'a> {
         vruntime: u64,
     ) -> Self {
         let id = Identifier::generate();
-        let waker = Waker::new(executor.ready_ids(), id);
+        let waker = Arc::new(Waker::new(Arc::clone(executor.ready_ids()), id));
         Self {
             executor,
             future,
@@ -53,14 +53,9 @@ impl<'a> Task<'a> {
     /// the virtual runtime of the task based on the time spent in the poll.
     #[allow(clippy::cast_possible_truncation)]
     pub fn poll(&mut self) -> core::task::Poll<()> {
-        // SAFETY: This is safe because we have an exclusive access to the
-        // task and by extension the waker. We also make sure that the
-        // RawWaker is not used after this function returns, and that no
-        // mutable references to the waker are created while the RawWaker
-        // is in use.
-        let waker = unsafe { core::task::Waker::from_raw(self.waker.raw()) };
-        let context = &mut core::task::Context::from_waker(&waker);
-        let (output, elapsed) = time::spent_into(|| self.future.as_mut().poll(context));
+        let waker = Arc::clone(&self.waker).into();
+        let mut context = core::task::Context::from_waker(&waker);
+        let (output, elapsed) = time::spent_into(|| self.future.as_mut().poll(&mut context));
         self.vruntime += elapsed.as_nanos() as u64;
         output
     }

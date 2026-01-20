@@ -1,8 +1,11 @@
-use crate::config;
-use crate::future::task::{self, Task};
-use crate::{arch, future::user::thread_loop};
-use alloc::boxed::Box;
-use alloc::collections::BTreeMap;
+use crate::{
+    arch, config,
+    future::{
+        task::{self, Task},
+        user::thread_loop,
+    },
+};
+use alloc::{boxed::Box, collections::BTreeMap, sync::Arc};
 use core::sync::atomic::{AtomicU64, Ordering};
 use crossbeam::queue::ArrayQueue;
 
@@ -57,7 +60,7 @@ pub struct Executor<'a> {
     /// The queue of tasks identifier that are ready to be executed, but was
     /// not yet inserted in the `ready_queue` map. This is used to avoid
     /// locking the `ready_queue` map for every task wake-up.
-    ready_ids: ArrayQueue<task::Identifier>,
+    ready_ids: Arc<ArrayQueue<task::Identifier>>,
 }
 
 impl Executor<'_> {
@@ -68,7 +71,7 @@ impl Executor<'_> {
         Self {
             tasks: spin::Mutex::new(BTreeMap::new()),
             ready_queue: spin::Mutex::new(BTreeMap::new()),
-            ready_ids: ArrayQueue::new(usize::from(config::MAX_TASKS)),
+            ready_ids: Arc::new(ArrayQueue::new(usize::from(config::MAX_TASKS))),
         }
     }
 
@@ -95,9 +98,6 @@ impl Executor<'_> {
 
             // Set the current task ID to the task that is being run now.
             set_current_task_id(id);
-
-            // TODO: Measure the time spent in the task for accounting purposes
-
             match task.poll() {
                 core::task::Poll::Ready(()) => {
                     // The task has completed. Therefore, we have nothing to
@@ -168,7 +168,7 @@ impl Executor<'_> {
 
     /// Return a reference to the ready queue.
     #[must_use]
-    pub const fn ready_ids(&self) -> &ArrayQueue<task::Identifier> {
+    pub const fn ready_ids(&self) -> &Arc<ArrayQueue<task::Identifier>> {
         &self.ready_ids
     }
 }

@@ -13,6 +13,12 @@ static PENDING_MESSAGE_TASKS: spin::Once<spin::Mutex<HashMap<usize, Vec<usize>>>
 /// sends a message to a receiver and waits for a reply.
 static MESSAGES: spin::Once<spin::Mutex<HashMap<usize, Message>>> = spin::Once::new();
 
+/// The global receiver queues storage that holds the wait queues for each
+/// receiver process. This is used to wake up receivers when a new message
+/// arrives for them.
+static RECEIVERS_QUEUE: spin::Once<spin::Mutex<HashMap<usize, future::wait::Queue>>> =
+    spin::Once::new();
+
 /// Represents a message sent between processes.
 #[derive(Debug, Clone)]
 pub struct Message {
@@ -21,6 +27,10 @@ pub struct Message {
 
     /// The receiver's process identifier.
     pub receiver: usize,
+
+    /// The queue that the sender is using to wait for a reply. This is used
+    /// to notify the sender when a reply is available.
+    pub sender_queue: future::wait::Queue,
 
     /// The operation code of the message. This defines the type of request
     /// or action that the sender wants the receiver to perform. This could
@@ -67,6 +77,7 @@ pub enum ReplyError {
 /// Initializes the IPC subsystem by setting up the necessary data structures.
 pub fn setup() {
     PENDING_MESSAGE_TASKS.call_once(|| spin::Mutex::new(HashMap::new()));
+    RECEIVERS_QUEUE.call_once(|| spin::Mutex::new(HashMap::new()));
     MESSAGES.call_once(|| spin::Mutex::new(HashMap::new()));
 }
 
@@ -98,12 +109,16 @@ pub async fn send(
         receiver: to,
         operation,
         payload_len: payload.len(),
+        sender_queue: future::wait::Queue::new(),
         payload: {
             let mut buf = [0; Message::MAX_PAYLOAD_SIZE];
             buf[..payload.len()].copy_from_slice(payload);
             buf
         },
     };
+
+    // Clone the sender's queue to use it for waiting for the reply.
+    let sender_queue = message.sender_queue.clone();
 
     // Insert the message into the MESSAGES table and record that the sender
     // is waiting for a reply from the receiver
@@ -113,6 +128,11 @@ pub async fn send(
         .entry(to)
         .or_default()
         .push(from);
+
+    // Wake up the receiver if it is waiting for messages
+    if let Some(queue) = get_receivers_queue().lock().remove(&to) {
+        queue.wake_all();
+    }
 
     // Wait for a reply by yielding until a message is available for the sender
     loop {
@@ -126,8 +146,8 @@ pub async fn send(
             }
         }
 
-        // Yield to allow other tasks to run
-        future::yield_once().await;
+        // Sleep until woken up by the receiver when a reply is available.
+        future::wait::wait(&sender_queue).await;
     }
 }
 
@@ -144,7 +164,7 @@ pub async fn receive(to: usize) -> Message {
             .get_mut(&to)
             .and_then(alloc::vec::Vec::pop)
         {
-            // There is a message for the receiver. Clone it and return it.
+            // There is a message for the receiver. Duplicate it and return it.
             // Why clone? Because we need to keep the message in the MESSAGES table
             // until the reply is sent back to the sender.
             if let Some(message) = get_message_storage().lock().get(&from) {
@@ -160,8 +180,9 @@ pub async fn receive(to: usize) -> Message {
             );
         }
 
-        // Yield to allow other tasks to run
-        future::yield_once().await;
+        // Sleep until woken up by a sender when a new message arrives.
+        let queue = get_receivers_queue().lock().entry(to).or_default().clone();
+        future::wait::wait(&queue).await;
     }
 }
 
@@ -191,6 +212,7 @@ pub fn reply(from: usize, to: usize, status: usize, payload: &[u8]) -> Result<()
             if msg.receiver != from {
                 return Err(ReplyError::NotWaitingForReply);
             }
+            msg.sender_queue.wake_all();
         }
         None => return Err(ReplyError::NotWaitingForReply),
     }
@@ -205,6 +227,7 @@ pub fn reply(from: usize, to: usize, status: usize, payload: &[u8]) -> Result<()
         operation: status,
         payload_len: payload.len(),
         payload: [0; Message::MAX_PAYLOAD_SIZE],
+        sender_queue: future::wait::Queue::new(),
     };
 
     // Copy the payload into the message and insert it into the
@@ -231,4 +254,15 @@ fn get_pending_tasks_storage() -> &'static spin::Mutex<HashMap<usize, Vec<usize>
     PENDING_MESSAGE_TASKS
         .get()
         .expect("PENDING_MESSAGE_TASKS not initialized")
+}
+
+/// An helper function to get a reference to the global `RECEIVERS_QUEUE`
+/// storage.
+///
+/// # Panics
+/// Panics if the IPC subsystem has not been initialized.
+fn get_receivers_queue() -> &'static spin::Mutex<HashMap<usize, future::wait::Queue>> {
+    RECEIVERS_QUEUE
+        .get()
+        .expect("RECEIVER_QUEUE not initialized")
 }

@@ -8,6 +8,7 @@ pub mod executor;
 pub mod mutex;
 pub mod task;
 pub mod user;
+pub mod wait;
 pub mod waker;
 
 /// A future that yields once before completing. This future can be useful
