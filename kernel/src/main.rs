@@ -62,7 +62,6 @@ pub unsafe extern "Rust" fn kiwi(memory: arch::memory::UsableMemory) -> ! {
     future::executor::spawn(user::elf::load(&ECHO));
 
     ipc::service::setup();
-    ipc::message::setup();
 
     let memory_usage = mm::phys::kernel_memory_pages() * 4;
     log::info!("Boot completed !");

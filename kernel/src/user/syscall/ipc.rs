@@ -8,6 +8,8 @@ impl From<ipc::message::SendError> for syscall::ipc::SendError {
     fn from(error: ipc::message::SendError) -> Self {
         match error {
             ipc::message::SendError::PayloadTooLarge => syscall::ipc::SendError::PayloadTooLarge,
+            ipc::message::SendError::TaskDoesNotExist => syscall::ipc::SendError::TaskDoesNotExist,
+            ipc::message::SendError::TaskDestroyed => syscall::ipc::SendError::TaskDestroyed,
         }
     }
 }
@@ -19,6 +21,13 @@ impl From<ipc::message::ReplyError> for syscall::ipc::ReplyError {
             ipc::message::ReplyError::NotWaitingForReply => {
                 syscall::ipc::ReplyError::NotWaitingForReply
             }
+            ipc::message::ReplyError::UnexpectedSender => {
+                syscall::ipc::ReplyError::UnexpectedSender
+            }
+            ipc::message::ReplyError::TaskDoesNotExist => {
+                syscall::ipc::ReplyError::TaskDoesNotExist
+            }
+            ipc::message::ReplyError::TaskDestroyed => syscall::ipc::ReplyError::TaskDestroyed,
         }
     }
 }
@@ -44,7 +53,6 @@ pub async fn send(
 ) -> Result<SyscallReturnValue, syscall::ipc::SendError> {
     // Read the message from user space and get the current task ID.
     let message = unsafe { Object::<syscall::ipc::Message>::new(message_ptr) };
-    let id = future::executor::current_task_id().unwrap();
 
     // Validate the payload size, ensuring it does not exceed the maximum
     // allowed size to avoid buffer overflows.
@@ -54,8 +62,7 @@ pub async fn send(
 
     // Send the message and wait for the reply.
     let reply = ipc::message::send(
-        usize::from(id),
-        message.receiver,
+        future::task::Identifier::from(message.receiver),
         message.kind,
         &message.payload[..message.payload_len],
     )
@@ -103,13 +110,12 @@ pub async fn send(
 pub async fn receive(
     message_ptr: Pointer<'_, syscall::ipc::Message>,
 ) -> Result<SyscallReturnValue, syscall::ipc::ReceiveError> {
-    let id = future::executor::current_task_id().unwrap();
-    let received = ipc::message::receive(usize::from(id)).await;
+    let received = ipc::message::receive().await;
 
     // Construct the message to be sent back to user space.
     let message = syscall::ipc::Message {
-        sender: received.sender,
-        receiver: received.receiver,
+        sender: usize::from(received.sender),
+        receiver: usize::from(received.receiver),
         kind: received.operation,
         payload_len: received.payload_len,
         payload: {
@@ -152,14 +158,12 @@ pub fn reply(
 ) -> Result<SyscallReturnValue, syscall::ipc::ReplyError> {
     // Read the reply from user space and get the current task ID.
     let reply = unsafe { Object::<syscall::ipc::Reply>::new(reply) };
-    let id = future::executor::current_task_id().unwrap();
 
     // Reply to the message. This is a synchronous operation that is guaranteed
     // to complete immediately since the task being replied to is waiting for
     // the reply. If the task is not waiting for a reply, an error is returned.
     ipc::message::reply(
-        usize::from(id),
-        to,
+        future::task::Identifier::from(to),
         reply.status,
         &reply.payload[..reply.payload_len],
     )?;

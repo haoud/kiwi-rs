@@ -57,6 +57,12 @@ pub enum SendError {
 
     /// The payload size exceeds the maximum allowed size.
     PayloadTooLarge = 3,
+
+    /// The target task does not exist.
+    TaskDoesNotExist = 4,
+
+    /// The target task has been destroyed before the message could be sent.
+    TaskDestroyed = 5,
 }
 
 impl From<SendError> for isize {
@@ -66,6 +72,8 @@ impl From<SendError> for isize {
             SendError::InvalidDestination => 1,
             SendError::BadMessage => 2,
             SendError::PayloadTooLarge => 3,
+            SendError::TaskDoesNotExist => 4,
+            SendError::TaskDestroyed => 5,
         }
     }
 }
@@ -106,6 +114,15 @@ pub enum ReplyError {
 
     /// The task is not waiting for a reply from the sender.
     NotWaitingForReply = 4,
+
+    /// The receiver expected a reply from a different sender.
+    UnexpectedSender = 5,
+
+    /// The target task does not exist.
+    TaskDoesNotExist = 6,
+
+    /// The target task has been destroyed before the reply could be sent.
+    TaskDestroyed = 7,
 }
 
 impl From<ReplyError> for isize {
@@ -116,6 +133,9 @@ impl From<ReplyError> for isize {
             ReplyError::BadMessage => 2,
             ReplyError::PayloadTooLarge => 3,
             ReplyError::NotWaitingForReply => 4,
+            ReplyError::UnexpectedSender => 5,
+            ReplyError::TaskDoesNotExist => 6,
+            ReplyError::TaskDestroyed => 7,
         }
     }
 }
