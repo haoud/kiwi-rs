@@ -63,6 +63,7 @@ pub async fn thread_loop(mut thread: arch::thread::Thread) {
                 // we reset its continuous execution time in order to give
                 // it a full quantum when it is rescheduled.
                 yield_once().await;
+                poll_generation = future::executor::poll_generation();
                 deadline = Instant::now() + THREAD_MAX_RUN_DURATION;
             }
             Resume::Fault => break Exit::Fault,
