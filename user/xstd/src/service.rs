@@ -11,44 +11,21 @@ impl SyscallCode for ::syscall::service::RegisterError {
     }
 }
 
-/// Errors that may occur during service unregistration.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ServiceUnregisterError {
-    /// An unknown error occurred.
-    Unknown = 0,
-
-    /// The service unregistration feature is not yet implemented.
-    NotImplemented = 1,
-}
-
-impl SyscallCode for ServiceUnregisterError {
+impl SyscallCode for ::syscall::service::UnregisterError {
     fn from_syscall_code(code: isize) -> Self {
         match -code {
-            1 => ServiceUnregisterError::NotImplemented,
-            _ => ServiceUnregisterError::Unknown,
+            1 => ::syscall::service::UnregisterError::NotImplemented,
+            _ => ::syscall::service::UnregisterError::Unknown,
         }
     }
 }
 
-/// Errors that may occur when connecting to a service.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ServiceConnectError {
-    /// An unknown error occurred.
-    Unknown = 0,
-
-    /// An invalid name was provided.
-    BadName = 1,
-
-    /// The specified service was not found.
-    ServiceNotFound = 2,
-}
-
-impl SyscallCode for ServiceConnectError {
+impl SyscallCode for ::syscall::service::ConnectionError {
     fn from_syscall_code(code: isize) -> Self {
         match -code {
-            1 => ServiceConnectError::BadName,
-            2 => ServiceConnectError::ServiceNotFound,
-            _ => ServiceConnectError::Unknown,
+            1 => ::syscall::service::ConnectionError::BadName,
+            2 => ::syscall::service::ConnectionError::ServiceNotFound,
+            _ => ::syscall::service::ConnectionError::Unknown,
         }
     }
 }
@@ -86,7 +63,7 @@ pub fn register(name: &str) -> Result<(), ::syscall::service::RegisterError> {
 /// # Errors
 /// This function returns a [`ServiceUnregisterError`] if the unregistration
 /// fails for any reason.
-pub fn unregister() -> Result<(), ServiceUnregisterError> {
+pub fn unregister() -> Result<(), ::syscall::service::UnregisterError> {
     let ret;
     unsafe {
         core::arch::asm!("ecall",
@@ -97,7 +74,9 @@ pub fn unregister() -> Result<(), ServiceUnregisterError> {
     }
 
     if syscall::failed(ret) {
-        Err(ServiceUnregisterError::from_syscall_code(ret as isize))
+        Err(::syscall::service::UnregisterError::from_syscall_code(
+            ret as isize,
+        ))
     } else {
         Ok(())
     }
@@ -108,7 +87,7 @@ pub fn unregister() -> Result<(), ServiceUnregisterError> {
 /// # Errors
 /// This function returns a [`ServiceConnectError`] if the connection fails,
 /// such as when the service is not found or an invalid name is provided.
-pub fn connect(name: &str) -> Result<usize, ServiceConnectError> {
+pub fn connect(name: &str) -> Result<usize, ::syscall::service::ConnectionError> {
     let ret;
     unsafe {
         core::arch::asm!("ecall",
@@ -121,7 +100,9 @@ pub fn connect(name: &str) -> Result<usize, ServiceConnectError> {
     }
 
     if syscall::failed(ret) {
-        Err(ServiceConnectError::from_syscall_code(ret as isize))
+        Err(::syscall::service::ConnectionError::from_syscall_code(
+            ret as isize,
+        ))
     } else {
         Ok(ret)
     }

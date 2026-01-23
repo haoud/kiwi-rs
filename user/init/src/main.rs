@@ -13,8 +13,11 @@ pub fn main() {
     let payload = &reply.payload[..reply.payload_len];
 
     if reply.status == 42 && payload == b"Hello, world!" {
+        _ = xstd::debug::write("Echo service responded correctly !");
         xstd::task::exit(0)
     } else {
+        _ = xstd::debug::write("Echo service responded incorrectly !");
+        _ = xstd::debug::write("Note: This is probably the kernel's fault :) ");
         xstd::task::exit(-1)
     }
 }
@@ -25,8 +28,14 @@ pub fn main() {
 pub fn connect_until_success(name: &str) -> usize {
     loop {
         match xstd::service::connect(name) {
-            Ok(handle) => return handle,
-            Err(_) => xstd::task::yield_now(),
+            Ok(handle) => {
+                _ = xstd::debug::write("Successfully connected to the service !");
+                return handle;
+            }
+            Err(_) => {
+                _ = xstd::debug::write("Failed to connect to the service, retrying...");
+                xstd::task::yield_now()
+            }
         }
     }
 }

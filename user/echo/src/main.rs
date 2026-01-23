@@ -12,6 +12,7 @@ pub fn main() {
     xstd::service::register("echo").unwrap();
     loop {
         let msg = xstd::ipc::receive().unwrap();
-        xstd::ipc::reply(msg.sender, msg.kind, &msg.payload[..msg.payload_len]).unwrap();
+        _ = xstd::debug::write("Echo service received a message, replying...");
+        _ = xstd::ipc::reply(msg.sender, msg.kind, &msg.payload[..msg.payload_len]);
     }
 }

@@ -3,6 +3,7 @@
 /// Re-export the main macro
 pub use macros::main;
 
+pub mod debug;
 pub mod ipc;
 pub mod service;
 pub mod syscall;
@@ -16,5 +17,6 @@ pub mod task;
 /// objects.
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
+    _ = debug::write("Task panicked, exiting");
     task::exit(-1)
 }

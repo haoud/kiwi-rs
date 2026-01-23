@@ -1,6 +1,7 @@
 use crate::{
     arch::{self, trap::Resume},
-    user::{ptr::Pointer, syscall},
+    future,
+    user::{self, ptr::Pointer, syscall},
 };
 use ::syscall::SyscallOp;
 
@@ -23,6 +24,7 @@ pub struct SyscallReturnValue {
 /// - The executor does not have a current task when required (this should
 ///   never happen in normal operation).
 #[must_use]
+#[allow(clippy::too_many_lines)]
 #[allow(clippy::cast_possible_wrap)]
 #[allow(clippy::cast_possible_truncation)]
 pub async fn handle_syscall(thread: &mut arch::thread::Thread) -> Resume {
@@ -96,6 +98,26 @@ pub async fn handle_syscall(thread: &mut arch::thread::Thread) -> Resume {
                 syscall::ipc::reply(to, ptr).map_err(isize::from)
             } else {
                 Err(isize::from(::syscall::ipc::ReplyError::BadMessage))
+            }
+        }
+        SyscallOp::DebugWrite => {
+            let self_id = future::executor::current_task_id().unwrap();
+            let str_ptr = core::ptr::with_exposed_provenance_mut::<u8>(args[0]);
+            let str_len = args[1];
+            let user_str = user::string::String::new(thread, str_ptr, str_len)
+                .ok_or(::syscall::debug::WriteError::BadName);
+            if let Ok(str) = user_str {
+                if let Ok(s) = str.fetch() {
+                    log::debug!("[task {}] {}", self_id, s);
+                    Ok(SyscallReturnValue {
+                        resume: Resume::Continue,
+                        value: s.len(),
+                    })
+                } else {
+                    Err(isize::from(::syscall::debug::WriteError::BadName))
+                }
+            } else {
+                Err(isize::from(::syscall::debug::WriteError::BadName))
             }
         }
         SyscallOp::Unknown => {

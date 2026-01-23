@@ -6,6 +6,7 @@
 //! if they get out of sync.
 #![no_std]
 
+pub mod debug;
 pub mod ipc;
 pub mod service;
 
@@ -40,6 +41,11 @@ pub enum SyscallOp {
     /// Reply to an IPC message
     IpcReply = 8,
 
+    /// Write on the kernel debug output. This should only be used for
+    /// debugging purposes, and this is not guaranteed to be available in
+    /// production builds.
+    DebugWrite = 999,
+
     /// Used for representing an unknown or unsupported syscall operation. It
     /// cannoy be used in actual syscalls.
     Unknown = u32::MAX,
@@ -57,6 +63,7 @@ impl From<usize> for SyscallOp {
             6 => SyscallOp::IpcSend,
             7 => SyscallOp::IpcReceive,
             8 => SyscallOp::IpcReply,
+            999 => SyscallOp::DebugWrite,
             _ => SyscallOp::Unknown,
         }
     }
