@@ -49,7 +49,7 @@ impl Queue {
 #[derive(Debug)]
 pub struct WaitFuture<'a> {
     queue: &'a Queue,
-    pooled: bool,
+    polled: bool,
 }
 
 impl<'a> WaitFuture<'a> {
@@ -58,7 +58,7 @@ impl<'a> WaitFuture<'a> {
     pub const fn new(queue: &'a Queue) -> Self {
         Self {
             queue,
-            pooled: false,
+            polled: false,
         }
     }
 }
@@ -79,7 +79,7 @@ impl Future for WaitFuture<'_> {
     /// getting stuck forever, but may lead to spurious wake-ups if the
     /// queue was poisoned after registering the waker.
     fn poll(self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Self::Output> {
-        if self.pooled {
+        if self.polled {
             return Poll::Ready(());
         }
         self.queue.waiting.push(context.waker().clone());
@@ -92,7 +92,7 @@ impl Future for WaitFuture<'_> {
         if self.queue.poisoned.load(Ordering::SeqCst) {
             return Poll::Ready(());
         }
-        self.get_mut().pooled = true;
+        self.get_mut().polled = true;
         Poll::Pending
     }
 }

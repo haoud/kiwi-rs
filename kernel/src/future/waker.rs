@@ -5,7 +5,7 @@ use crossbeam::queue::ArrayQueue;
 /// A waker that can wake up a task.
 #[derive(Debug)]
 pub struct Waker {
-    /// The que to push the task identifier to when waking
+    /// The queue to push the task identifier to when waking
     /// up the task.
     queue: Arc<ArrayQueue<task::Identifier>>,
 
