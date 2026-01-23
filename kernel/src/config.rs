@@ -1,3 +1,5 @@
+use core::time::Duration;
+
 /// The maximum number of tasks that can be created. The kernel will use this
 /// constant to allocate memory for the task control blocks and other data
 /// during initialization. Diminishing this value will reduce the memory usage
@@ -19,18 +21,16 @@ pub const MAX_TASKS: u16 = 32;
 /// not waste too much memory since the stack is only allocated once per CPU.
 pub const KERNEL_STACK_SIZE: usize = 4096 * 4;
 
-/// The number of milliseconds that a thread can run before being preempted
-/// by the scheduler if it has not yielded the CPU. This value is used to
-/// prevent a single thread from monopolizing the CPU.
+/// The number of milliseconds that a thread can run continuously before being
+/// preempted if it does not yield voluntarily. This value is used to set the
+/// timer interrupt frequency for thread scheduling. A smaller value will lead to
+/// more frequent context switches, which can improve responsiveness but also
+/// increase overhead. A larger value will reduce context switch overhead but
+/// may lead to less responsive multitasking.
 ///
-/// The value of 25 milliseconds is chosen because it is a good balance
-/// between responsiveness and performance. A lower value would make the
-/// system more responsive, but it would also increase the number of context
-/// switches, which would reduce the overall throughput of the system and
-/// increase the overhead of the scheduler. A higher value would reduce the
-/// number of context switches and reduce the overhead of the scheduler, but
-/// it would also make the system less responsive.
-///
-/// Depending on the use case, this value can be adjusted to better fit the
-/// requirements of the system.
-pub const THREAD_QUANTUM: u64 = 25;
+/// The current value of 25 milliseconds is a reasonable compromise for general
+/// purpose computing. It provides a good balance between responsiveness and
+/// overhead for most workloads. However, this value may need to be adjusted
+/// based on the specific requirements of the system and the nature of the tasks
+/// being run.
+pub const THREAD_MAX_RUN_DURATION: Duration = Duration::from_millis(25);

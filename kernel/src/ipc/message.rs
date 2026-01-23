@@ -1,26 +1,15 @@
-use alloc::vec::Vec;
-use hashbrown::HashMap;
+use alloc::boxed::Box;
 
-use crate::future;
+use crate::future::{self};
 
-/// The table that keeps track for a given receiver, which tasks have sent
-/// a message and are waiting for a reply.
-static PENDING_MESSAGE_TASKS: spin::Once<spin::Mutex<HashMap<usize, Vec<usize>>>> =
-    spin::Once::new();
-
-/// The global message storage that holds messages sent between processes. Our
-/// IPC mechanism is based on synchronous message passing, where a sender
-/// sends a message to a receiver and waits for a reply.
-static MESSAGES: spin::Once<spin::Mutex<HashMap<usize, Message>>> = spin::Once::new();
-
-/// Represents a message sent between processes.
+/// Represents a message sent between tasks.
 #[derive(Debug, Clone)]
 pub struct Message {
-    /// The sender's process identifier.
-    pub sender: usize,
+    /// The sender's task identifier.
+    pub sender: future::task::Identifier,
 
-    /// The receiver's process identifier.
-    pub receiver: usize,
+    /// The receiver's task identifier.
+    pub receiver: future::task::Identifier,
 
     /// The operation code of the message. This defines the type of request
     /// or action that the sender wants the receiver to perform. This could
@@ -47,11 +36,52 @@ impl Message {
     pub const MAX_PAYLOAD_SIZE: usize = 256;
 }
 
+/// Represents the IPC waiting state of a task. This enum defines the
+/// different states a task can be when waiting for IPC operations.
+#[derive(Debug)]
+pub enum IpcWaitingState {
+    /// The task does not wait for anything.
+    None,
+
+    /// The task is waiting to send a message.
+    WaitingForSend,
+
+    /// The task is waiting to receive a message.
+    WaitingForMessage,
+
+    /// The task is waiting for a reply to a previously sent message by
+    /// the specified task identifier.
+    WaitingForReply(future::task::Identifier),
+}
+
+impl IpcWaitingState {
+    /// Sets the IPC state to `WaitingForReply`.
+    pub fn set_waiting_for_reply(&mut self, from: future::task::Identifier) {
+        *self = IpcWaitingState::WaitingForReply(from);
+    }
+
+    /// Sets the IPC state to `WaitingForMessage`
+    pub fn set_waiting_for_message(&mut self) {
+        *self = IpcWaitingState::WaitingForMessage;
+    }
+
+    /// Sets the IPC state to `WaitingForSend`.
+    pub fn set_waiting_for_send(&mut self) {
+        *self = IpcWaitingState::WaitingForSend;
+    }
+}
+
 /// Represents errors that can occur when sending a message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SendError {
     /// The payload size exceeds the maximum allowed size.
     PayloadTooLarge,
+
+    /// The target task does not exist.
+    TaskDoesNotExist,
+
+    /// The target task has been destroyed before the message could be sent.
+    TaskDestroyed,
 }
 
 /// Represents errors that can occur when replying to a message.
@@ -62,38 +92,46 @@ pub enum ReplyError {
 
     /// The receiver is not expecting a reply.
     NotWaitingForReply,
-}
 
-/// Initializes the IPC subsystem by setting up the necessary data structures.
-pub fn setup() {
-    PENDING_MESSAGE_TASKS.call_once(|| spin::Mutex::new(HashMap::new()));
-    MESSAGES.call_once(|| spin::Mutex::new(HashMap::new()));
+    /// The receiver expected a reply from a different sender.
+    UnexpectedSender,
+
+    /// The target task does not exist.
+    TaskDoesNotExist,
+
+    /// The target task has been destroyed before the reply could be sent.
+    TaskDestroyed,
 }
 
 /// Sends a message from one process to another and waits until a reply is
-/// received. The function is asynchronous and yields control while waiting
-/// for the reply.
+/// received.
 ///
 /// # Errors
-/// Returns a [`SendError`] if the message could not be sent. Possible errors
-/// include:
-/// - [`SendError::PayloadTooLarge`]: The payload size exceeds the maximum
-///   allowed size. See [`Message::MAX_PAYLOAD_SIZE`] for the limit.
+/// Returns a [`SendError`] if the message could not be sent or if the reply
+/// could not be received (mostly due to the target task being destroyed
+/// before the operation could complete).
 ///
 /// # Panics
-/// Panics if the IPC subsystem has not been initialized.
+/// Panics if there is no current task context. This can only happen if this
+/// function is called during kernel initialization, before any tasks have been
+/// created, and is a serious programming error.
 pub async fn send(
-    from: usize,
-    to: usize,
+    to: future::task::Identifier,
     operation: usize,
     payload: &[u8],
-) -> Result<Message, SendError> {
+) -> Result<Box<Message>, SendError> {
     if payload.len() > Message::MAX_PAYLOAD_SIZE {
         return Err(SendError::PayloadTooLarge);
     }
 
+    // Check that the target task exists
+    if !future::task::exists(to) {
+        return Err(SendError::TaskDoesNotExist);
+    }
+
     // Create the message to be sent
-    let message = Message {
+    let from = future::executor::current_task_id().unwrap();
+    let message = Box::new(Message {
         sender: from,
         receiver: to,
         operation,
@@ -103,31 +141,103 @@ pub async fn send(
             buf[..payload.len()].copy_from_slice(payload);
             buf
         },
-    };
+    });
 
-    // Insert the message into the MESSAGES table and record that the sender
-    // is waiting for a reply from the receiver
-    get_message_storage().lock().insert(from, message);
-    get_pending_tasks_storage()
-        .lock()
-        .entry(to)
-        .or_default()
-        .push(from);
-
-    // Wait for a reply by yielding until a message is available for the sender
+    // Send the message by changing the IPC state of the receiver process
+    // if it is waiting for messages. Otherwise, we change our own state to
+    // waiting for a reply, and wait until the receiver is ready to process it.
     loop {
-        // Check if there is a reply message for the sender.
-        {
-            let mut messages = get_message_storage().lock();
-            if let Some(reply) = messages.get(&from)
-                && reply.sender == to
-            {
-                return Ok(messages.remove(&from).unwrap());
+        let send_queue = future::task::try_with_local_set_from(to, |set| {
+            if let Some(receiver_local_set) = set {
+                match &*receiver_local_set.ipc_waiting_state.lock() {
+                    IpcWaitingState::WaitingForMessage => {
+                        // The receiver is waiting for messages. Due to
+                        // borrowing rules, we cannot set the message directly
+                        // here since the compiler does not know that this
+                        // will be the last iteration before we break out of
+                        // the loop, and throws a borrow error. So we return
+                        // None to indicate that we can proceed to deliver
+                        // the message.
+                        Ok(None)
+                    }
+                    _ => Ok(Some(receiver_local_set.ipc_send_queue.clone())),
+                }
+            } else {
+                // The target task has been destroyed before we could
+                // send the message. Return an error to the caller.
+                Err(SendError::TaskDestroyed)
             }
+        })?;
+
+        if let Some(queue) = send_queue {
+            // The receiver was not waiting for messages. We need to wait
+            // until it is ready to receive our message. Set our IPC state
+            // to waiting for send and wait on the associated queue.
+            future::task::with_current_local_set(|current_local_set| {
+                current_local_set
+                    .ipc_waiting_state
+                    .lock()
+                    .set_waiting_for_send();
+            });
+            future::wait::wait(&queue).await;
+        } else {
+            future::task::try_with_local_set_from(to, |set| {
+                if let Some(receiver_local_set) = set {
+                    // Wake up the receiver since it is waiting for messages,
+                    // and deliver the message to the receiver's local data
+                    // set.
+                    receiver_local_set.ipc_message.lock().replace(message);
+                    receiver_local_set.ipc_receive_queue.wake_one();
+                    Ok(())
+                } else {
+                    // The target task has been destroyed before we could
+                    // send the message. Return an error to the caller.
+                    Err(SendError::TaskDestroyed)
+                }
+            })?;
+            break;
+        }
+    }
+
+    // Now that the message has been sent, wait for the reply. Set our IPC
+    // state to waiting for reply and wait on the associated queue.
+    loop {
+        let reply = future::task::with_current_local_set(|current_local_set| {
+            if let Some(reply) = current_local_set.ipc_reply.lock().take() {
+                // A reply has been received. Return it.
+                Ok(Some(reply))
+            } else if !future::task::exists(to) {
+                // The target task has been destroyed before sending
+                // the reply. Return an error to the caller.
+                Err(SendError::TaskDestroyed)
+            } else {
+                // No reply yet. Set the state to waiting for reply from the
+                // receiver process, and return the associated reply queue
+                // to wait on and be woken up when the reply arrives.
+                current_local_set
+                    .ipc_waiting_state
+                    .lock()
+                    .set_waiting_for_reply(to);
+                Ok(None)
+            }
+        })?;
+
+        if let Some(reply) = reply {
+            break Ok(reply);
         }
 
-        // Yield to allow other tasks to run
-        future::yield_once().await;
+        // We are still waiting for the reply. Sleep and wait to be woken up
+        // when the reply arrives, or when the target task is destroyed.
+        let queue = future::task::try_with_local_set_from(to, |receiver_local_set| {
+            if let Some(set) = receiver_local_set {
+                Ok(set.ipc_reply_queue.clone())
+            } else {
+                // The target task has been destroyed before sending
+                // the reply. Return an error to the caller.
+                Err(SendError::TaskDestroyed)
+            }
+        })?;
+        future::wait::wait(&queue).await;
     }
 }
 
@@ -135,100 +245,99 @@ pub async fn send(
 /// asynchronous and yields control while waiting for a message to arrive.
 ///
 /// # Panics
-/// Panics if the IPC subsystem has not been initialized.
-pub async fn receive(to: usize) -> Message {
+/// Panics if there is no current task context. This can only happen if this
+/// function is called during kernel initialization, before any tasks have been
+/// created, and is a serious programming error.
+pub async fn receive() -> Box<Message> {
     loop {
-        // Check if there is a message for the receiver
-        if let Some(from) = get_pending_tasks_storage()
-            .lock()
-            .get_mut(&to)
-            .and_then(alloc::vec::Vec::pop)
-        {
-            // There is a message for the receiver. Clone it and return it.
-            // Why clone? Because we need to keep the message in the MESSAGES table
-            // until the reply is sent back to the sender.
-            if let Some(message) = get_message_storage().lock().get(&from) {
-                return message.clone();
-            }
+        // Check if there is a message for the receiver.
+        let message = future::task::with_current_local_set(|current_local_set| {
+            current_local_set.ipc_message.lock().take()
+        });
 
-            // This should not happen, as we have a pending task for this
-            // receiver, but no message. Log an error and continue waiting.
-            log::error!(
-                "Inconsistent state: pending task {:?} for receiver {:?} but no message",
-                from,
-                to
-            );
+        // Yes, a message is available. Return it.
+        if let Some(message) = message {
+            break message;
         }
 
-        // Yield to allow other tasks to run
-        future::yield_once().await;
+        // No message available yet. Change the IPC state to indicate that we
+        // are waiting for a message, wake up any senders waiting to send us
+        // messages, and wait on our receive queue to be woken up when a
+        // message arrives.
+        let queue = future::task::with_current_local_set(|local_set| {
+            local_set.ipc_waiting_state.lock().set_waiting_for_message();
+            local_set.ipc_send_queue.wake_all();
+            local_set.ipc_receive_queue.clone()
+        });
+        future::wait::wait(&queue).await;
     }
 }
 
 /// Sends a reply message from one process to another.
 ///
 /// # Errors
-/// Returns a `ReplyError` if the reply could not be sent. Possible errors
-/// include:
-/// - [`ReplyError::PayloadTooLarge`]: The payload size exceeds the maximum allowed size.
-/// - [`ReplyError::NotWaitingForReply`]: The receiver is not expecting a reply from the
-///   sender. This usually means that there was no prior message sent from the
-///   sender to the receiver.
+/// Returns a [`ReplyError`] if the reply could not be sent.
 ///
 /// # Panics
-/// Panics if the IPC subsystem has not been initialized.
-pub fn reply(from: usize, to: usize, status: usize, payload: &[u8]) -> Result<(), ReplyError> {
+/// Panics if there is no current task context. This can only happen if this
+/// function is called during kernel initialization, before any tasks have been
+/// created, and is a serious programming error.
+pub fn reply(
+    to: future::task::Identifier,
+    status: usize,
+    payload: &[u8],
+) -> Result<(), ReplyError> {
     if payload.len() > Message::MAX_PAYLOAD_SIZE {
         return Err(ReplyError::PayloadTooLarge);
     }
 
-    // Check if the receiver is waiting for a reply. We can know this by
-    // checking if there is a message stored for the receiver in the MESSAGES
-    // table. We ensure that the sender is indeed the one waiting for the reply.
-    let mut messages = get_message_storage().lock();
-    match messages.get(&to) {
-        Some(msg) => {
-            if msg.receiver != from {
-                return Err(ReplyError::NotWaitingForReply);
-            }
-        }
-        None => return Err(ReplyError::NotWaitingForReply),
+    if !future::task::exists(to) {
+        return Err(ReplyError::TaskDoesNotExist);
     }
 
-    // Remove the original message from the storage
-    messages.remove(&to);
-
     // Create the reply message
-    let mut message = Message {
+    let from = future::executor::current_task_id().unwrap();
+    let message = Box::new(Message {
         sender: from,
         receiver: to,
         operation: status,
         payload_len: payload.len(),
-        payload: [0; Message::MAX_PAYLOAD_SIZE],
-    };
+        payload: {
+            let mut buf = [0; Message::MAX_PAYLOAD_SIZE];
+            buf[..payload.len()].copy_from_slice(payload);
+            buf
+        },
+    });
 
-    // Copy the payload into the message and insert it into the
-    // MESSAGES table for the receiver to pick up later
-    message.payload[..payload.len()].copy_from_slice(payload);
-    messages.insert(to, message);
+    // Check if the receiver is waiting for a reply by checking its IPC state,
+    // and ensure that it is waiting for a reply from the correct sender. If
+    // so, deliver the reply message and wake up the receiver.
+    future::task::try_with_local_set_from(to, |set| {
+        if let Some(receiver_local_set) = set {
+            match *receiver_local_set.ipc_waiting_state.lock() {
+                IpcWaitingState::WaitingForReply(expected_from) => {
+                    if expected_from != from {
+                        return Err(ReplyError::UnexpectedSender);
+                    }
+                    receiver_local_set.ipc_reply.lock().replace(message);
+                    Ok(())
+                }
+                _ => Err(ReplyError::NotWaitingForReply),
+            }
+        } else {
+            // The target task has been destroyed before we could
+            // send the reply. Return an error to the caller.
+            Err(ReplyError::TaskDestroyed)
+        }
+    })?;
+
+    // Since we can't know which task will be woken up (in case of multiple
+    // tasks waiting for a reply), we wake them all up. This can happen if
+    // the task handle multiple IPC receives before replying to any of them.
+    // TODO: Only wake up the task that we replied to.
+    future::task::with_current_local_set(|current_local_set| {
+        current_local_set.ipc_reply_queue.wake_all();
+    });
+
     Ok(())
-}
-
-/// An helper function to get a reference to the global MESSAGES storage.
-///
-/// # Panics
-/// Panics if the IPC subsystem has not been initialized.
-fn get_message_storage() -> &'static spin::Mutex<HashMap<usize, Message>> {
-    MESSAGES.get().expect("MESSAGES not initialized")
-}
-
-/// An helper function to get a reference to the global `PENDING_MESSAGE_TASKS`
-/// storage.
-///
-/// # Panics
-/// Panics if the IPC subsystem has not been initialized.
-fn get_pending_tasks_storage() -> &'static spin::Mutex<HashMap<usize, Vec<usize>>> {
-    PENDING_MESSAGE_TASKS
-        .get()
-        .expect("PENDING_MESSAGE_TASKS not initialized")
 }

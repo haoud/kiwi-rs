@@ -25,3 +25,18 @@ pub fn internal_frequency() -> u64 {
 pub fn internal_tick() -> u64 {
     crate::arch::target::timer::internal_tick()
 }
+
+/// Get the current time since the system booted, in internal ticks.
+#[must_use]
+pub fn current_time_ticks() -> u64 {
+    crate::arch::target::timer::current_time_ticks()
+}
+
+/// Get the current time since the system booted, as a `Duration`.
+#[must_use]
+pub fn since_boot() -> core::time::Duration {
+    let ticks = current_time_ticks();
+    let tick_duration = internal_tick();
+
+    core::time::Duration::from_nanos(ticks * tick_duration)
+}

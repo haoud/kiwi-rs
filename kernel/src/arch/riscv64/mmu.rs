@@ -38,13 +38,9 @@ pub const PAGE_SHIFT: usize = 12;
 /// The kernel's page table. This table is used by the kernel to identity
 /// map the physical memory of the system, allowing the kernel to easily
 /// access the physical memory of the system.
-static KERNEL_TABLE: spin::Mutex<RootTable> = spin::Mutex::new(RootTable::empty());
+static KERNEL_TABLE: spin::Once<spin::Mutex<RootTable>> = spin::Once::new();
 
-/// The root page table type. This is just an alias for `Table`, but it allows
-/// to distinguish between the root table and other tables in the page table
-/// hierarchy. This is useful for implementing the `Drop` trait for the root table,
-/// which will free all the tables and frames mapped by this table when it is
-/// dropped.
+/// The root page table type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RootTable(Table);
 
@@ -55,7 +51,7 @@ impl RootTable {
     /// Trying to use this table without properly initializing it will lead
     /// to immediate page faults.
     #[must_use]
-    pub const fn empty() -> Self {
+    pub fn empty() -> Self {
         Self(Table::empty())
     }
 
@@ -65,8 +61,11 @@ impl RootTable {
     /// If any of the user-accessible entries was pointer to a valid table or
     /// a valid page, this will lead to the memory leak of the entire table
     /// and its sub-tables or pages.
+    ///
+    /// # Panics
+    /// This function will panic if the kernel table is not initialized.
     pub fn copy_kernel_space(&mut self) {
-        let table = KERNEL_TABLE.lock();
+        let table = KERNEL_TABLE.get().unwrap().lock();
         self.user_space_mut().iter_mut().for_each(Entry::clear);
         self.kernel_space_mut()
             .iter_mut()
@@ -74,7 +73,9 @@ impl RootTable {
             .for_each(|(dst, src)| *dst = *src);
     }
 
-    /// Set the current page table to this table.
+    /// Set the current page table to this table. If this table is already
+    /// the current page table, this function does nothing and avoids the
+    /// costly operation of switching the page table and flushing the TLB.
     ///
     /// # Safety
     /// This function is unsafe because it can cause undefined behavior if
@@ -83,9 +84,13 @@ impl RootTable {
     /// the current page table, and must ensure that the table will remain
     /// in memory while it is set as the current page table.
     pub unsafe fn set_current(&self) {
+        let current_ppn = riscv::register::satp::read().ppn();
         let ppn = translate_kernel_ptr(self).as_usize() >> PAGE_SHIFT;
-        riscv::register::satp::set(riscv::register::satp::Mode::Sv39, 0, ppn);
-        riscv::asm::sfence_vma_all();
+
+        if ppn != current_ppn {
+            riscv::register::satp::set(riscv::register::satp::Mode::Sv39, 0, ppn);
+            riscv::asm::sfence_vma_all();
+        }
     }
 
     /// Get a mutable reference to the last entry of the kernel space.
@@ -100,6 +105,11 @@ impl RootTable {
         &self.kernel_space()[255]
     }
 
+    /// Get a mutable reference to the address space table.
+    pub fn address_space_mut(&mut self) -> &mut Table {
+        &mut self.0
+    }
+
     /// Get a mutable reference to the kernel space entries of the table.
     #[must_use]
     pub fn kernel_space_mut(&mut self) -> &mut [Entry] {
@@ -110,6 +120,12 @@ impl RootTable {
     #[must_use]
     pub fn user_space_mut(&mut self) -> &mut [Entry] {
         &mut self.0.0[0..256]
+    }
+
+    /// Get a reference to the address space table.
+    #[must_use]
+    pub fn address_space(&self) -> &Table {
+        &self.0
     }
 
     /// Get a reference to the kernel space entries of the table.
@@ -128,12 +144,6 @@ impl RootTable {
 impl AsRef<Table> for RootTable {
     fn as_ref(&self) -> &Table {
         &self.0
-    }
-}
-
-impl AsMut<Table> for RootTable {
-    fn as_mut(&mut self) -> &mut Table {
-        &mut self.0
     }
 }
 
@@ -168,7 +178,7 @@ impl Drop for RootTable {
 /// the level is a leaf level.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[repr(align(4096))]
-pub struct Table([Entry; 512]);
+pub struct Table([Entry; 512], core::marker::PhantomPinned);
 
 impl Table {
     /// Create a new empty page table. An empty page table is a table where
@@ -176,7 +186,7 @@ impl Table {
     /// address and are not present in the page table.
     #[must_use]
     pub const fn empty() -> Self {
-        Self([Entry::missing(); 512])
+        Self([Entry::missing(); 512], core::marker::PhantomPinned)
     }
 }
 
@@ -516,7 +526,10 @@ pub fn setup() {
     log::debug!("Using SV39 paging mode (3 levels of page tables)");
     log::debug!("User address space :   0x0000000000000000 - 0x00007FFFFFFFFFFF");
     log::debug!("Kernel address space : 0xFFFFFFFFC0000000 - 0xFFFFFFFFFFFFFFFF");
-    let mut table = KERNEL_TABLE.lock();
+
+    let mut table = KERNEL_TABLE
+        .call_once(|| spin::Mutex::new(RootTable::empty()))
+        .lock();
 
     // Map the first 255 GiB of physical memory to the first 255 GiB
     // of virtual memory in the kernel's address space. This will allow
@@ -579,7 +592,7 @@ pub unsafe fn map<T: addr::virt::Type>(
 ) -> Result<(), MapError> {
     // Extract the VPNs from the virtual address.
     let vpn = virt.vpn_sv39();
-    let mut entry = &mut root.as_mut()[vpn[0]];
+    let mut entry = &mut root.address_space_mut()[vpn[0]];
     for i in 1..3 {
         // If we reach a leaf entry before the last level, this means that
         // the page was mapped with a larger frame size (2 MiB or 1 GiB). This
@@ -646,7 +659,7 @@ pub unsafe fn unmap<T: addr::virt::Type>(
     virt: Virtual<T>,
 ) -> Result<Frame4Kib, UnmapError> {
     let vpn = virt.vpn_sv39();
-    let mut entry = &mut root.as_mut()[vpn[0]];
+    let mut entry = &mut root.address_space_mut()[vpn[0]];
     for i in 1..3 {
         // If we reach a leaf entry before the last level, this means that
         // the page was mapped with a larger frame size (2 MiB or 1 GiB), which
@@ -709,8 +722,11 @@ unsafe fn unmap_all(entries: &mut [Entry]) {
 /// The caller must ensure that the kernel page table is properly initialized
 /// before calling this function, and must also ensure that no user space mappings
 /// will be accessed while the kernel page table is in use.
+///
+/// # Panics
+/// This function will panic if the kernel page table is not initialized.
 pub unsafe fn use_kernel_table() {
-    KERNEL_TABLE.lock().set_current();
+    KERNEL_TABLE.get().unwrap().lock().set_current();
 }
 
 /// Allow the kernel to access user pages by setting the SUM bit in the sstatus

@@ -1,5 +1,5 @@
 use crate::{
-    arch::{thread::Thread, trap::Resume},
+    arch::trap::Resume,
     future, ipc,
     user::{object::Object, ptr::Pointer, syscall::SyscallReturnValue},
 };
@@ -8,6 +8,8 @@ impl From<ipc::message::SendError> for syscall::ipc::SendError {
     fn from(error: ipc::message::SendError) -> Self {
         match error {
             ipc::message::SendError::PayloadTooLarge => syscall::ipc::SendError::PayloadTooLarge,
+            ipc::message::SendError::TaskDoesNotExist => syscall::ipc::SendError::TaskDoesNotExist,
+            ipc::message::SendError::TaskDestroyed => syscall::ipc::SendError::TaskDestroyed,
         }
     }
 }
@@ -19,6 +21,13 @@ impl From<ipc::message::ReplyError> for syscall::ipc::ReplyError {
             ipc::message::ReplyError::NotWaitingForReply => {
                 syscall::ipc::ReplyError::NotWaitingForReply
             }
+            ipc::message::ReplyError::UnexpectedSender => {
+                syscall::ipc::ReplyError::UnexpectedSender
+            }
+            ipc::message::ReplyError::TaskDoesNotExist => {
+                syscall::ipc::ReplyError::TaskDoesNotExist
+            }
+            ipc::message::ReplyError::TaskDestroyed => syscall::ipc::ReplyError::TaskDestroyed,
         }
     }
 }
@@ -39,13 +48,11 @@ impl From<ipc::message::ReplyError> for syscall::ipc::ReplyError {
 /// This function may panic if the current task ID cannot be retrieved. This
 /// should never happen since this function is called from a task context.
 pub async fn send(
-    thread: &mut Thread,
-    message_ptr: Pointer<syscall::ipc::Message>,
-    reply_ptr: Pointer<syscall::ipc::Reply>,
+    message_ptr: Pointer<'_, syscall::ipc::Message>,
+    reply_ptr: Pointer<'_, syscall::ipc::Reply>,
 ) -> Result<SyscallReturnValue, syscall::ipc::SendError> {
     // Read the message from user space and get the current task ID.
     let message = unsafe { Object::<syscall::ipc::Message>::new(message_ptr) };
-    let id = future::executor::current_task_id().unwrap();
 
     // Validate the payload size, ensuring it does not exceed the maximum
     // allowed size to avoid buffer overflows.
@@ -55,8 +62,7 @@ pub async fn send(
 
     // Send the message and wait for the reply.
     let reply = ipc::message::send(
-        usize::from(id),
-        message.receiver,
+        future::task::Identifier::from(message.receiver),
         message.kind,
         &message.payload[..message.payload_len],
     )
@@ -75,11 +81,8 @@ pub async fn send(
 
     // Write the reply back to user space.
     // SAFETY: This is safe because we have verified that the pointer is valid
-    // when creating the `Pointer<Reply>` in the syscall handler, and we
-    // ensure that we are writing to the correct user address space by setting
-    // the root table of the current thread as current before writing.
+    // when creating the `Pointer<Reply>` in the syscall handler
     unsafe {
-        thread.root_table().set_current();
         Object::write(&reply_ptr, &reply);
     }
 
@@ -105,16 +108,14 @@ pub async fn send(
 /// This function may panic if the current task ID cannot be retrieved. This
 /// should never happen since this function is called from a task context.
 pub async fn receive(
-    thread: &mut Thread,
-    message_ptr: Pointer<syscall::ipc::Message>,
+    message_ptr: Pointer<'_, syscall::ipc::Message>,
 ) -> Result<SyscallReturnValue, syscall::ipc::ReceiveError> {
-    let id = future::executor::current_task_id().unwrap();
-    let received = ipc::message::receive(usize::from(id)).await;
+    let received = ipc::message::receive().await;
 
     // Construct the message to be sent back to user space.
     let message = syscall::ipc::Message {
-        sender: received.sender,
-        receiver: received.receiver,
+        sender: usize::from(received.sender),
+        receiver: usize::from(received.receiver),
         kind: received.operation,
         payload_len: received.payload_len,
         payload: {
@@ -127,11 +128,8 @@ pub async fn receive(
 
     // Write the message back to user space.
     // SAFETY: This is safe because we have verified that the pointer is valid
-    // when creating the `Pointer<Message>` in the syscall handler, and we
-    // ensure that we are writing to the correct user address space by setting
-    // the root table of the current thread as current before writing.
+    // when creating the `Pointer<Message>`
     unsafe {
-        thread.root_table().set_current();
         Object::write(&message_ptr, &message);
     }
 
@@ -160,14 +158,12 @@ pub fn reply(
 ) -> Result<SyscallReturnValue, syscall::ipc::ReplyError> {
     // Read the reply from user space and get the current task ID.
     let reply = unsafe { Object::<syscall::ipc::Reply>::new(reply) };
-    let id = future::executor::current_task_id().unwrap();
 
     // Reply to the message. This is a synchronous operation that is guaranteed
     // to complete immediately since the task being replied to is waiting for
     // the reply. If the task is not waiting for a reply, an error is returned.
     ipc::message::reply(
-        usize::from(id),
-        to,
+        future::task::Identifier::from(to),
         reply.status,
         &reply.payload[..reply.payload_len],
     )?;
