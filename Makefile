@@ -5,19 +5,20 @@ build: build-user build-kernel
 
 # Build the kernel
 build-kernel:
-	cd kernel && cargo build --release --target riscv64gc-unknown-none-elf
+	cd kernel && cargo build --release
 
 # Build the userspace
 build-user:
 	cd user && make build
 
 # Run the kernel
-run: build
-	cd kernel && cargo run --release --target riscv64gc-unknown-none-elf
+run: build-user
+	cd kernel && cargo run --release
 
 # Clean the intermediate build files
 clean:
 	cd kernel && cargo clean
+	cd user && make clean
 
 # Print help message
 help:

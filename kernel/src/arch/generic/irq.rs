@@ -1,3 +1,10 @@
+/// The state of IRQs, either enabled or disabled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum State {
+    Enabled,
+    Disabled,
+}
+
 /// Enable IRQs.
 ///
 /// # Safety
@@ -19,8 +26,35 @@ pub fn disable() {
 
 /// Check if IRQs are enabled.
 #[must_use]
-pub fn enabled() -> bool {
-    crate::arch::target::irq::enabled()
+pub fn enabled() -> State {
+    if crate::arch::target::irq::enabled() {
+        State::Enabled
+    } else {
+        State::Disabled
+    }
+}
+
+/// Save the current state of IRQs and disable them. The returned state can be
+/// used to restore the state of IRQs later using [`restore()`].
+#[must_use]
+pub fn save_and_disable() -> State {
+    let state = enabled();
+    disable();
+    state
+}
+
+/// Restore the state of IRQs to the given state.
+///
+/// # Safety
+/// This function is unsafe because it may enable IRQs, which can cause many,
+/// many side effects that could lead to undefined behavior if the caller is
+/// not careful. See the documentation of [`enable()`] for more details on the
+/// safety requirements of enabling IRQs.
+pub unsafe fn restore(state: State) {
+    match state {
+        State::Enabled => enable(),
+        State::Disabled => disable(),
+    }
 }
 
 /// Execute the given closure with IRQs disabled, returning the result of the
@@ -30,17 +64,15 @@ pub fn without<F, R>(f: F) -> R
 where
     F: FnOnce() -> R,
 {
-    let were_enabled = enabled();
-    if were_enabled {
-        disable();
-    }
+    let state = save_and_disable();
     let ret = f();
-    if were_enabled {
-        // SAFETY: We checked that IRQs were enabled before disabling them.
-        // Thus, it is safe to assume that enabling them again is safe since
-        // it should not cause any undefined behavior for the caller if they
-        // were already enabled and working correctly.
-        unsafe { enable() };
-    }
+
+    // SAFETY: We checked that IRQs were enabled before disabling them.
+    // Thus, it is safe to assume that enabling them again is safe since
+    // it should not cause any undefined behavior for the caller if they
+    // were already enabled and working correctly.
+    unsafe {
+        restore(state);
+    };
     ret
 }

@@ -37,11 +37,13 @@ impl core::fmt::Write for Logger {
 /// # Panics
 /// This function will panic if the logging system is already initialized,
 /// meaning that this function was called more than once.
-#[cfg(feature = "logging")]
 pub fn setup() {
-    log::set_max_level(log::LevelFilter::Info);
-    log::set_logger(&Logger {}).unwrap();
-    log::trace!("Logger initialized");
+    #[cfg(feature = "logging")]
+    {
+        log::set_max_level(log::LevelFilter::Info);
+        log::set_logger(&Logger {}).unwrap();
+        log::trace!("Logger initialized");
+    }
 }
 
 /// Write a message to the log. This function is only by the internal
@@ -49,5 +51,5 @@ pub fn setup() {
 /// On most platforms, this function will write to the serial port or
 /// the console.
 pub fn write(message: &str) {
-    crate::arch::target::log::write(message);
+    crate::arch::target::logging::write(message);
 }

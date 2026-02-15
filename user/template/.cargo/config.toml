@@ -1,4 +1,0 @@
-# Linker flags
-rustflags = [
-  "-Cpanic=abort",
-]

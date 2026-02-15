@@ -1,18 +1,8 @@
-#![allow(dead_code)]
+#[cfg(target_arch = "x86_64")]
+pub mod x86_64;
 
-extern crate alloc;
-
-#[cfg(target_arch = "riscv64")]
-pub mod riscv64;
-#[cfg(target_arch = "riscv64")]
-pub use riscv64 as target;
+#[cfg(target_arch = "x86_64")]
+pub use x86_64 as target;
 
 pub mod generic;
 pub use generic::*;
-
-unsafe extern "Rust" {
-    /// The architecture-independent entry point for the kernel. This function
-    /// should be called by the architecture-specific entry point after the
-    /// architecture-specific initialization is complete.
-    fn kiwi(memory: generic::memory::UsableMemory) -> !;
-}

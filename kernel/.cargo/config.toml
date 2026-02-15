@@ -1,15 +1,10 @@
-[target.riscv64gc-unknown-none-elf]
-runner = """
-  qemu-system-riscv64
-    -serial mon:stdio
-    -machine virt
-    -nographic
-    -m 32M
-    -kernel
-"""
+[unstable]
+build-std-features = ["compiler-builtins-mem"]
+build-std = ["compiler_builtins", "core", "alloc"]
+json-target-spec = true
 
-# Linker flags
-rustflags = [
-  "-Clink-arg=-Tlink.ld",
-  "-Cpanic=abort",
-]
+[build]
+target = "src/arch/x86_64/config/kernel.json"
+
+[target.'cfg(target_os = "none")']
+runner = "../scripts/runner.sh"

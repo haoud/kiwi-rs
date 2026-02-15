@@ -3,17 +3,12 @@
     "rust-analyzer.procMacro.enable": true,
     "rust-analyzer.check.allTargets": false,
     "rust-analyzer.check.command": "clippy",
-    "rust-analyzer.cargo.target": "riscv64gc-unknown-none-elf",
+    "rust-analyzer.cargo.target": "x86_64-unknown-none",
+    "rust-analyzer.linkedProjects": [
+        "crates/kiwi-seqlock/Cargo.toml",
+        "kernel/Cargo.toml",
+    ],
     "editor.semanticTokenColorCustomizations": {
         "enabled": true
     },
-    "rust-analyzer.linkedProjects": [
-        "crates/kiwi-seqlock/Cargo.toml",
-        "crates/kiwi-syscall/Cargo.toml",
-        "user/init/Cargo.toml",
-        "user/echo/Cargo.toml",
-        "user/xstd/Cargo.toml",
-        "kernel/Cargo.toml",
-    ],
-    "makefile.configureOnOpen": false,
 }

@@ -1,2 +1,7 @@
 **/target
 **/bin
+
+*.bin
+*.elf
+*.iso
+*.sys
