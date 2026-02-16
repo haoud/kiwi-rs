@@ -1,0 +1,27 @@
+{
+    "lsp": {
+        "rust-analyzer": {
+            "initialization_options": {
+                "cargo": {
+                    "target": "x86_64-unknown-none",
+                    "allTargets": false
+                },
+                "check": {
+                    "allTargets": false,
+                    "command": "clippy"
+                },
+                "procMacro": {
+                    "enable": true,
+                    "attributes": {
+                        "enable": true
+                    }
+                },
+                "linkedProjects": [
+                    "crates/kiwi-seqlock/Cargo.toml",
+                    "kernel/Cargo.toml"
+                ]
+            }
+        }
+    },
+    "tab_size": 4
+}

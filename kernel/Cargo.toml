@@ -16,7 +16,7 @@ bitflags = "2.11"
 spin = "0.10.0"
 log = "0.4"
 
-[workspace.lints.rust]
+[workspace.lints.clippy]
 undocumented_unsafe_blocks = "warn"
 pedantic = "warn"
 all = "warn"
@@ -34,6 +34,9 @@ limine = { version = "0.5" }
 [features]
 default = ["logging"]
 logging = []
+
+[lints]
+workspace = true
 
 [profile.release]
 codegen-units = 1
