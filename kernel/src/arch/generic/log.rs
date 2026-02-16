@@ -1,5 +1,10 @@
 use core::fmt::Write;
 
+/// The global logger instance. This is protected by a spinlock to ensure that
+/// only one thread can access the logger at a time, to avoid interleaving log
+/// messages.
+static LOGGER: spin::Mutex<Logger> = spin::Mutex::new(Logger {});
+
 /// A simple logger that use the architecture's log implementation.
 struct Logger {}
 
@@ -17,7 +22,7 @@ impl log::Log for Logger {
                 log::Level::Debug => "\x1B[1m\x1b[34m[#]\x1b[0m",
                 log::Level::Trace => "\x1B[1m\x1b[35m[~]\x1b[0m",
             };
-            _ = writeln!(Logger {}, "{} {}", level, record.args());
+            _ = writeln!(LOGGER.lock(), "{} {}", level, record.args());
         }
     }
 
@@ -40,7 +45,7 @@ impl core::fmt::Write for Logger {
 pub fn setup() {
     #[cfg(feature = "logging")]
     {
-        log::set_max_level(log::LevelFilter::Info);
+        log::set_max_level(log::LevelFilter::Debug);
         log::set_logger(&Logger {}).unwrap();
         log::trace!("Logger initialized");
     }

@@ -11,6 +11,9 @@ pub unsafe fn enable() {
 
 /// Disable IRQs.
 pub fn disable() {
+    // SAFETY: Disabling interrupts shouldn't not cause any memory unsafety
+    // (on the contrary, it usually helps to avoid them!) or any unexpected
+    // side effects.
     unsafe {
         x86_64::instr::cli();
     }
@@ -20,6 +23,10 @@ pub fn disable() {
 #[must_use]
 pub fn enabled() -> bool {
     let rflags: u64;
+    // SAFETY: Reading the RFLAGS register should not cause any memory unsafety
+    // or any unexpected side effects. We ensure that the stack pointer remains
+    // unchanged by pushing the flags onto the stack and popping them into a
+    // register.
     unsafe {
         core::arch::asm!(
             "pushfq",

@@ -141,6 +141,11 @@ pub unsafe fn hlt() {
 ///  and can vary between CPU models.
 #[inline]
 pub fn pause() {
+    // SAFETY: The pause instruction is supported on all x86 CPUs and does not
+    // have any side effects that could lead to memory unsafety. It just wastes
+    // some CPU cycles in order to improve the performance of spinlock loops
+    // (and I find funny the fact that wasting a few CPU cycles can actually
+    // improve the performance of the system).
     unsafe {
         core::arch::asm!("pause", options(nomem, nostack, preserves_flags));
     }
