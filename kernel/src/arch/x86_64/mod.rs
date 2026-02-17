@@ -1,10 +1,12 @@
 use crate::arch;
 
+pub mod boot;
 pub mod cpu;
 pub mod instr;
 pub mod irq;
 pub mod lang;
 pub mod logging;
+pub mod page;
 pub mod smp;
 
 /// The entry point of the kernel.
@@ -16,9 +18,10 @@ pub mod smp;
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn start() -> ! {
     arch::log::setup();
+    boot::setup();
     smp::setup();
 
-    log::info!("Welcome to Kiwi!");
+    log::info!("Boot completed !");
     arch::cpu::freeze();
 }
 
