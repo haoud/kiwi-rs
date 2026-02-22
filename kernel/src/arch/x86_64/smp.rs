@@ -1,4 +1,9 @@
-use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use core::{
+    cell::Cell,
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+};
+
+use macros::per_cpu;
 
 use crate::{arch::x86_64, config::MAX_CPUS};
 
@@ -19,6 +24,10 @@ static CPU_AVAILABLE: AtomicUsize = AtomicUsize::new(1);
 /// Whether the APs have started up and are initialized.
 static AP_READY: AtomicBool = AtomicBool::new(false);
 
+/// The identifier of the current CPU.
+#[per_cpu]
+static CPU_ID: Cell<u8> = Cell::new(0);
+
 /// Setup the SMP environment.
 ///
 /// # Panics
@@ -28,6 +37,10 @@ pub fn setup() {
         .get_response()
         .expect("No SMP support provided by the bootloader");
     let cpu_count = smp_response.cpus().len();
+    let cpu_id = smp_response
+        .bsp_lapic_id()
+        .try_into()
+        .expect("BSP LAPIC ID is too large to fit into an u8");
 
     // Some assertions to ensure that the bootloader provided valid information
     // about the CPUs in the system, and that the kernel is correctly
@@ -62,12 +75,15 @@ pub fn setup() {
     while CPU_AVAILABLE.load(Ordering::Relaxed) < cpu_count {
         core::hint::spin_loop();
     }
+
     AP_READY.store(true, Ordering::Release);
+    CPU_ID.local().set(cpu_id);
 }
 
 /// Setup the auxiliary processor.
-pub fn ap_setup() {
+pub fn ap_setup(cpu_id: u8) {
     CPU_AVAILABLE.fetch_add(1, Ordering::Relaxed);
+    CPU_ID.local().set(cpu_id);
 }
 
 /// Check if the APs have started up and are initialized.
@@ -87,5 +103,5 @@ pub fn cpu_count() -> usize {
 /// that can be used to differentiate them.
 #[must_use]
 pub fn cpu_identifier() -> u8 {
-    todo!()
+    CPU_ID.local().get()
 }
