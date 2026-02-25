@@ -13,3 +13,10 @@ pub fn cpu_identifier() -> u8 {
 pub fn cpu_count() -> usize {
     crate::arch::target::smp::cpu_count()
 }
+
+/// Check if the application processors (APs) have finished booting and are
+/// ready to be used.
+#[must_use]
+pub fn ap_ready() -> bool {
+    crate::arch::target::smp::ap_ready()
+}

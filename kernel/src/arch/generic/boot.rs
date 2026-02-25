@@ -1,4 +1,7 @@
-use crate::{arch, library::lock::spin::Spinlock};
+use crate::{
+    arch::{self, addr::PAGE_SIZE},
+    library::lock::spin::Spinlock,
+};
 
 /// The boot memory map. If the boot memory map is `None`, it means that the
 /// boot subsystem has not been initialized yet, or that the memory has already
@@ -13,25 +16,32 @@ pub static BOOT_MEMORY_MAP: Spinlock<Option<arch::mem::MemoryMap>> = Spinlock::n
 /// # Panics
 /// Panics if the boot memory map has not been initialized, if the boot memory
 /// has been reclaimed or if there is not enough free memory to satisfy the
-/// allocation request.
+/// allocation request. Also panics if the requested alignment is not a power
+/// of two or greater than a page size, or if the requested size is zero.
 #[must_use]
 pub fn allocate(size: usize, align: usize) -> *mut u8 {
+    assert!(align.is_power_of_two(), "Alignment must be a power of two");
+    assert!(align <= PAGE_SIZE, "Alignment must be at most a page size");
+    assert!(size > 0, "Size must be greater than zero");
+
     let mut mmap = BOOT_MEMORY_MAP.lock();
     let entry = mmap
         .as_mut()
         .expect("Boot memory map not initialized or already reclaimed")
         .regions
         .iter_mut()
-        .find(|entry| entry.kind == arch::mem::MemoryKind::Free && entry.len() >= size + align)
+        .filter(|entry| entry.kind == arch::mem::MemoryKind::Free)
+        .find(|entry| {
+            let aligned_start = entry.start.align_up(align);
+            entry.end >= aligned_start + size
+        })
         .expect("Not enough free memory to satisfy the allocation request");
 
-    let start = entry.start;
-    let misalign = start % align;
-    let padding = if misalign == 0 { 0 } else { align - misalign };
-    let length = size + padding;
-
-    entry.start += length;
-    arch::page::translate(start + padding) as *mut u8
+    let start = entry.start.align_up(align);
+    entry.start = start + size;
+    arch::page::translate(start)
+        .expect("Failed to translate boot physical memory address to kernel memory")
+        .as_mut_ptr::<u8>()
 }
 
 /// Allocate a block of memory from the boot allocator and zero it out. This is

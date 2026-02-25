@@ -1,5 +1,7 @@
 use arrayvec::ArrayVec;
 
+use crate::arch::addr::{AllMemory, Physical};
+
 /// A memory map describes the layout of physical memory.
 #[derive(Debug, Clone)]
 pub struct MemoryMap {
@@ -26,8 +28,8 @@ impl MemoryMap {
 /// A memory region describes a contiguous range of physical memory.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Region {
-    pub start: usize,
-    pub end: usize,
+    pub start: Physical<AllMemory>,
+    pub end: Physical<AllMemory>,
     pub kind: MemoryKind,
 }
 
@@ -35,7 +37,7 @@ impl Region {
     /// Returns the length of the region in bytes.
     #[must_use]
     pub const fn len(&self) -> usize {
-        self.end - self.start
+        self.end.as_usize() - self.start.as_usize()
     }
 
     /// Returns `true` if the region is empty, i.e. its length is zero.

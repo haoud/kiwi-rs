@@ -2,6 +2,7 @@ use macros::init;
 
 use crate::arch;
 
+pub mod addr;
 pub mod boot;
 pub mod cpu;
 pub mod instr;
