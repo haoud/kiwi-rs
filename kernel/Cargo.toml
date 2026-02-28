@@ -15,6 +15,7 @@ macros = { path = "crates/macros" }
 zerocopy = { version = "0.8", features = ["alloc", "derive"] }
 arrayvec = { version = "0.7", default-features = false }
 usize_cast = "1.1"
+bitfield = "0.19"
 bitflags = "2.11"
 spin = "0.10.0"
 log = "0.4"
@@ -27,6 +28,7 @@ all = "warn"
 [dependencies]
 usize_cast = { workspace = true }
 arrayvec = { workspace = true }
+bitfield = { workspace = true }
 bitflags = { workspace = true }
 seqlock = { workspace = true }
 macros = { workspace = true }

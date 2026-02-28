@@ -150,3 +150,35 @@ pub fn pause() {
         core::arch::asm!("pause", options(nomem, nostack, preserves_flags));
     }
 }
+
+/// Load the GDT with the provided address.
+///
+/// # Safety
+/// The GDT must be properly formatted and must be located at the provided
+/// address. The GDT must also remain valid and in the memory for the entire
+/// lifetime of the kernel or until the GDT register is reloaded with another
+/// address.
+#[inline]
+pub unsafe fn lgdt(address: usize) {
+    core::arch::asm!(
+        "lgdt [{}]",
+        in(reg) address,
+        options(nostack, preserves_flags)
+    );
+}
+
+/// Load the Task Register (TR) with the provided selector.
+///
+/// # Safety
+/// The selector must point to a valid TSS entry in the GDT. The TSS entry must
+/// be properly formatted and must point to a valid TSS structure in the
+/// memory. The TSS structure must also remain valid and in the memory for the
+/// entire lifetime of the kernel as well as the GDT structure that contains the
+/// TSS entry.
+pub unsafe fn ltr(selector: u16) {
+    core::arch::asm!(
+        "ltr ax",
+        in("ax") selector,
+        options(nomem, nostack, preserves_flags)
+    );
+}

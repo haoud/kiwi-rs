@@ -5,6 +5,7 @@ use crate::arch;
 pub mod addr;
 pub mod boot;
 pub mod cpu;
+pub mod gdt;
 pub mod instr;
 pub mod irq;
 pub mod lang;
@@ -13,6 +14,7 @@ pub mod msr;
 pub mod page;
 pub mod percpu;
 pub mod smp;
+pub mod tss;
 
 /// The entry point of the kernel.
 ///
@@ -27,6 +29,8 @@ pub unsafe extern "C" fn start() -> ! {
     boot::setup();
     arch::percpu::setup();
     smp::setup();
+    gdt::setup();
+    tss::setup();
 
     log::info!("Boot completed !");
     arch::cpu::freeze();
@@ -54,6 +58,8 @@ unsafe extern "C" fn ap_start(cpu: &limine::mp::Cpu) -> ! {
 
     arch::percpu::setup();
     smp::ap_setup(cpu_id);
+    gdt::setup();
+    tss::setup();
 
     log::debug!(
         "CPU {} has completed its setup !",
