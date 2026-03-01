@@ -7,6 +7,10 @@ use crate::arch::addr::{AllMemory, Physical};
 pub struct MemoryMap {
     /// A list of memory regions that describe the layout of physical memory.
     pub regions: ArrayVec<Region, { Self::MAX_REGIONS }>,
+
+    /// The last physical address of RAM. This is used to determine the maximum
+    /// physical address that the kernel can use for memory management.
+    pub last_regular_address: Physical<AllMemory>,
 }
 
 impl MemoryMap {
@@ -21,6 +25,7 @@ impl MemoryMap {
     pub fn empty() -> Self {
         Self {
             regions: ArrayVec::new(),
+            last_regular_address: Physical::new(0),
         }
     }
 }
@@ -66,4 +71,39 @@ pub enum MemoryKind {
     /// used to mark regions that are damaged or do not belong to any
     /// other memory kind.
     Poisoned,
+}
+
+impl MemoryKind {
+    /// Returns `true` if the memory kind represents regular memory that can be
+    /// used for general-purpose allocations. This includes both `Free` and
+    /// `Kernel` memory kinds.
+    #[must_use]
+    pub const fn is_regular(&self) -> bool {
+        matches!(self, Self::Free | Self::Kernel)
+    }
+
+    /// Returns `true` if the memory kind represents a free region.
+    #[must_use]
+    pub const fn is_free(&self) -> bool {
+        matches!(self, Self::Free)
+    }
+
+    /// Returns `true` if the memory kind represents a region that contains the
+    /// kernel and its data structures.
+    #[must_use]
+    pub const fn is_kernel(&self) -> bool {
+        matches!(self, Self::Kernel)
+    }
+
+    /// Returns `true` if the memory kind represents a reserved region.
+    #[must_use]
+    pub const fn is_reserved(&self) -> bool {
+        matches!(self, Self::Reserved)
+    }
+
+    /// Returns `true` if the memory kind represents a poisoned region.
+    #[must_use]
+    pub const fn is_poisoned(&self) -> bool {
+        matches!(self, Self::Poisoned)
+    }
 }

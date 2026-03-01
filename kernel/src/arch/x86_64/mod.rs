@@ -1,6 +1,6 @@
 use macros::init;
 
-use crate::arch;
+use crate::{arch, main};
 
 pub mod addr;
 pub mod boot;
@@ -27,15 +27,13 @@ pub mod tss;
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn start() -> ! {
     arch::log::setup();
-    boot::setup();
+    arch::boot::setup();
     arch::percpu::setup();
     smp::setup();
     gdt::setup();
     tss::setup();
     trap::setup();
-
-    log::info!("Boot completed !");
-    arch::cpu::freeze();
+    main();
 }
 
 /// The entry point of the application processors (APs).
@@ -64,9 +62,6 @@ unsafe extern "C" fn ap_start(cpu: &limine::mp::Cpu) -> ! {
     tss::setup();
     trap::setup();
 
-    log::debug!(
-        "CPU {} has completed its setup !",
-        arch::smp::cpu_identifier()
-    );
+    log::debug!("CPU {cpu_id} has completed its setup !");
     arch::cpu::freeze();
 }

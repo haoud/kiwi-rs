@@ -376,6 +376,14 @@ impl<T: PhysicalSpace> Physical<T> {
         }
     }
 
+    /// Get the frame index of the physical address. This is simply the
+    /// physical address divided by the page size, and is used to index
+    /// into page tables and other data structures that are organized by pages.
+    #[must_use]
+    pub const fn frame_idx(&self) -> usize {
+        self.0 / PAGE_SIZE
+    }
+
     /// Convert the physical address to a raw address.
     #[must_use]
     pub const fn as_usize(&self) -> usize {
