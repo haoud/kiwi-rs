@@ -14,6 +14,7 @@ pub mod msr;
 pub mod page;
 pub mod percpu;
 pub mod smp;
+pub mod trap;
 pub mod tss;
 
 /// The entry point of the kernel.
@@ -31,6 +32,7 @@ pub unsafe extern "C" fn start() -> ! {
     smp::setup();
     gdt::setup();
     tss::setup();
+    trap::setup();
 
     log::info!("Boot completed !");
     arch::cpu::freeze();
@@ -60,6 +62,7 @@ unsafe extern "C" fn ap_start(cpu: &limine::mp::Cpu) -> ! {
     smp::ap_setup(cpu_id);
     gdt::setup();
     tss::setup();
+    trap::setup();
 
     log::debug!(
         "CPU {} has completed its setup !",

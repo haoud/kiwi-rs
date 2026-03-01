@@ -167,6 +167,22 @@ pub unsafe fn lgdt(address: usize) {
     );
 }
 
+/// Load the IDT with the provided address.
+///
+/// # Safety
+/// The IDT must be properly formatted and must be located at the provided
+/// address. The IDT must also remain valid and in the memory for the entire
+/// lifetime of the kernel or until the IDT register is reloaded with another
+/// address.
+#[inline]
+pub unsafe fn lidt(address: usize) {
+    core::arch::asm!(
+        "lidt [{}]",
+        in(reg) address,
+        options(nostack, preserves_flags)
+    );
+}
+
 /// Load the Task Register (TR) with the provided selector.
 ///
 /// # Safety
