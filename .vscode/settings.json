@@ -9,6 +9,6 @@
         "kernel/Cargo.toml"
     ],
     "editor.semanticTokenColorCustomizations": {
-        "enabled": true
+        "enabled": false
     }
 }

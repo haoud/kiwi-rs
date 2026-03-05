@@ -4,6 +4,7 @@
 #![warn(clippy::pedantic)]
 #![allow(unsafe_op_in_unsafe_fn)]
 #![feature(unsafe_cell_access)]
+#![feature(ptr_as_uninit)]
 
 use macros::init;
 
@@ -22,6 +23,7 @@ pub mod mm;
 #[init]
 pub unsafe fn main() -> ! {
     mm::page::setup();
+    mm::buddy::setup();
 
     log::info!("Boot completed !");
     arch::cpu::freeze();

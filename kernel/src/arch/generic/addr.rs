@@ -7,17 +7,22 @@ use core::ops::{Add, AddAssign, Sub, SubAssign};
 /// architecture.
 pub const PAGE_SIZE: usize = crate::arch::target::addr::PAGE_SIZE;
 
+/// The number of bits to shift to get the page index from a virtual or physical
+/// address. This is simply the base-2 logarithm of the page size, and is used
+/// to rapidly convert between addresses and page indices.
+pub const PAGE_SHIFT: usize = PAGE_SIZE.trailing_zeros() as usize;
+
 /// A physical address space. This is used to represent physical addresses and
 /// to distinguish between different types of physical addresses (e.g. DMA
 /// addresses, high memory addresses...).
-pub trait PhysicalSpace: Copy {
+pub trait PhysicalSpace: Copy + PartialEq + Eq + PartialOrd + Ord {
     const MIN: usize;
     const MAX: usize;
 }
 
 /// A virtual address space. This is used to distinguish between kernel and
 /// user addresses, and to provide type safety when working with addresses.
-pub trait VirtualSpace: Copy {
+pub trait VirtualSpace: Copy + PartialEq + Eq + PartialOrd + Ord {
     const MIN: usize;
     const MAX: usize;
 }
@@ -44,7 +49,7 @@ pub struct User {}
 /// A virtual address in the address space `T`. This type ensures that virtual
 ///  addresses are always valid in their respective address space.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Virtual<T>(usize, core::marker::PhantomData<T>);
+pub struct Virtual<T: VirtualSpace>(usize, core::marker::PhantomData<T>);
 
 impl<T: VirtualSpace> Virtual<T> {
     /// Try to create a new virtual address from a raw address. This will
@@ -58,6 +63,17 @@ impl<T: VirtualSpace> Virtual<T> {
         } else {
             None
         }
+    }
+
+    /// Create a new virtual address from a raw address without checking if it
+    /// belongs to the virtual address space of `T`.
+    ///
+    /// # Safety
+    /// The caller must ensure that the address belongs to the specified
+    /// virtual address space `T`.
+    #[must_use]
+    pub const unsafe fn new_unchecked(addr: usize) -> Self {
+        Self(addr, core::marker::PhantomData)
     }
 
     /// Get the misalignment of the virtual address with respect to the given
@@ -172,6 +188,24 @@ impl Virtual<Kernel> {
     #[must_use]
     pub const fn new(addr: usize) -> Self {
         Self::try_new(addr).expect("Address is not in the kernel virtual address space")
+    }
+
+    /// Create a new kernel virtual address from a mutable reference.
+    #[must_use]
+    pub fn from_mut<T>(r: &mut T) -> Self {
+        // SAFETY: Reference are guaranteed to be in the kernel virtual address
+        // space since the kernel isn't allowed to create references to user
+        // memory.
+        unsafe { Self::new_unchecked(core::ptr::from_mut(r).addr()) }
+    }
+
+    /// Create a new kernel virtual address from a reference.
+    #[must_use]
+    pub fn from_ref<T>(r: &T) -> Self {
+        // SAFETY: Reference are guaranteed to be in the kernel virtual address
+        // space since the kernel isn't allowed to create references to user
+        // memory.
+        unsafe { Self::new_unchecked(core::ptr::from_ref(r).addr()) }
     }
 }
 

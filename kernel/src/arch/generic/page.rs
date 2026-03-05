@@ -8,3 +8,13 @@ use crate::arch::addr::{AllMemory, Kernel, Physical, Virtual};
 pub fn translate(physical: Physical<AllMemory>) -> Option<Virtual<Kernel>> {
     crate::arch::target::page::translate(physical)
 }
+
+/// Translate a virtual address to a physical address if the virtual address
+/// belongs to the HHDM (High Half Direct Mapping).
+///
+/// If the virtual address does not belong to the HHDM, this function returns
+/// `None`.
+#[must_use]
+pub fn from_hhdm(address: Virtual<Kernel>) -> Option<Physical<AllMemory>> {
+    crate::arch::target::page::from_hhdm(address)
+}
