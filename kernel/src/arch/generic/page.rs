@@ -18,3 +18,9 @@ pub fn translate(physical: Physical<AllMemory>) -> Option<Virtual<Kernel>> {
 pub fn from_hhdm(address: Virtual<Kernel>) -> Option<Physical<AllMemory>> {
     crate::arch::target::page::from_hhdm(address)
 }
+
+/// Check if a virtual address belongs to the HHDM (High Half Direct Mapping).
+#[must_use]
+pub fn in_hhdm(address: Virtual<Kernel>) -> bool {
+    crate::arch::target::page::in_hhdm(address)
+}

@@ -1,6 +1,9 @@
 //! This module defines types and functions for working with virtual and
 //! physical addresses in a type-safe way.
-use core::ops::{Add, AddAssign, Sub, SubAssign};
+use core::{
+    ops::{Add, AddAssign, Sub, SubAssign},
+    ptr::NonNull,
+};
 
 /// The page size for the architecture. If the architecture supports multiple
 /// page sizes, this should be the minimum page size allowed by the
@@ -209,6 +212,15 @@ impl Virtual<Kernel> {
     }
 }
 
+impl<T> From<Virtual<Kernel>> for NonNull<T> {
+    fn from(addr: Virtual<Kernel>) -> Self {
+        // SAFETY: The `Virtual<Kernel>` type guarantees that the address is a
+        // valid kernel virtual address, in the higher half of the address
+        // space, therefore a kernel virtual address cannot ever be null.
+        unsafe { NonNull::new_unchecked(addr.as_mut_ptr::<T>()) }
+    }
+}
+
 impl<T: VirtualSpace> From<Virtual<T>> for usize {
     fn from(addr: Virtual<T>) -> Self {
         addr.0
@@ -338,6 +350,18 @@ impl<T: PhysicalSpace> Physical<T> {
         }
     }
 
+    /// Create a new physical address from a frame index. Return `None` if the
+    /// resulting address is not a valid physical address in the physical
+    /// address space of `T`, or if the conversion between the frame index and
+    /// the physical address would overflow.
+    #[must_use]
+    pub const fn try_from_index(index: usize) -> Option<Self> {
+        match index.checked_mul(PAGE_SIZE) {
+            Some(addr) => Self::try_new(addr),
+            None => None,
+        }
+    }
+
     /// Get the misalignment of the physical address with respect to the given
     /// alignment. This will return a value in the range `[0, align)`, where
     /// `align` must be a power of two.
@@ -434,6 +458,18 @@ impl Physical<AllMemory> {
     #[must_use]
     pub const fn new(addr: usize) -> Self {
         Self::try_new(addr).expect("Address is not a valid physical address")
+    }
+
+    /// Create a new physical address from a frame index.
+    ///
+    /// # Panics
+    /// This function will panic if the resulting address is not a valid physical
+    /// address, or if the conversion between the frame index and the physical
+    /// address would overflow.
+    #[must_use]
+    pub const fn from_frame_index(index: usize) -> Self {
+        Self::try_from_index(index)
+            .expect("Address from a frame index is not a valid physical address")
     }
 }
 

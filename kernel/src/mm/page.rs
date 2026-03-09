@@ -26,28 +26,20 @@ pub enum Page {
     FreeBuddyBlockHead { order: buddy::Order },
 
     /// The page is used and is the head of a contiguous block of pages
-    /// allocated by the buddy allocator. It contains the order of the block
-    /// and metadata about the usage of the block. Every page in the block
-    /// should refer to the head page to access the usage metadata.
+    /// allocated by the buddy allocator. It contains the order of the
+    /// block and metadata about the usage of the block.
     UsedBuddyBlockHead {
         order: buddy::Order,
         usage: UsageMetadata,
     },
 
-    /// The page belongs to a contiguous block of pages of the buddy allocator,
-    /// allocated or not. The page itself does not contain any metadata about
-    /// itself, but instead it refers to the head page of the block it belongs
-    /// to since all pages in the block share the same metadata. This avoids
-    /// the need to update the metadata of all pages in the block when a
-    /// change needs to be made to all pages of the block.
-    BuddyBlockPage { page: usize },
-
     /// The page is used by the kernel or the user.
     Used { usage: UsageMetadata },
 
-    /// The page is free and belongs to the buddy allocator, but it is not the
-    /// head of a contiguous block of pages.
-    Free,
+    /// The page belongs to a contiguous block of pages of the buddy allocator,
+    /// allocated or not. The page itself does not contain any metadata, and it
+    /// should refer to the head page
+    BuddyBlockPage,
 
     /// The page is used by the kernel and shouldn't be used for any purpose.
     /// This is used to mark pages that are damaged or for pages that we do
@@ -140,9 +132,13 @@ impl UsageMetadata {
     /// Decreases the usage count of the page by one, and returns `true` if
     /// the usage count has reached zero, indicating that the page is no longer
     /// in use.
+    ///
+    /// # Panics
+    /// Panics if the usage count is already zero, indicating a bug in the code
+    /// that is trying to dispose a page that is not in use.
     pub fn dispose(&mut self) -> bool {
         if self.counter == 0 {
-            log::error!("Disposing a page with zero usage count");
+            panic!("Disposing a page with zero usage count");
         } else if self.counter != u16::MAX {
             self.counter -= 1;
         }
@@ -312,7 +308,7 @@ pub struct PagesStatistics {
 
 impl PagesStatistics {
     /// Prints the statistics in a human-readable format to the kernel console.
-    pub fn print_debug_output(&self) {
+    pub fn print_debug(&self) {
         log::debug!(
             "Physical memory: {} KiB total, {} KiB free, {} KiB used by kernel, \
         {} KiB reserved, {} KiB poisoned",
@@ -399,24 +395,49 @@ impl MetadataTable {
             {
                 match entry.kind {
                     arch::mem::MemoryKind::Free => {
-                        *frame = Page::Free;
+                        // Free pages are marked as a used buddy block head
+                        // with an order of zero so the buddy allocator can
+                        // be simply initialized by freeing all used buddy
+                        // block head pages with an order of zero.
+                        frame.change_state(Page::UsedBuddyBlockHead {
+                            order: buddy::Order::new(0),
+                            usage: UsageMetadata::used(false),
+                        });
                     }
                     arch::mem::MemoryKind::Kernel => {
-                        *frame = Page::Used {
+                        frame.change_state(Page::Used {
                             usage: UsageMetadata::used(true),
-                        };
+                        });
                     }
                     arch::mem::MemoryKind::Reserved => {
-                        *frame = Page::Reserved;
+                        frame.change_state(Page::Reserved);
                     }
                     arch::mem::MemoryKind::Poisoned => {
-                        *frame = Page::Poisoned;
+                        frame.change_state(Page::Poisoned);
                     }
                 }
             }
         }
 
         self.table.replace(table);
+    }
+
+    /// Get the metadata for the physical page at the given address. If the
+    /// given address is out of bounds of the metadata table, returns `None`.
+    #[must_use]
+    pub fn try_from_address(&self, physical: Physical<AllMemory>) -> Option<&Spinlock<Page>> {
+        self.table().get(physical.frame_idx())
+    }
+
+    /// Get the metadata for the physical page at the given address.
+    ///
+    /// # Panics
+    /// Panics if the given address is out of bounds of the metadata table.
+    #[must_use]
+    pub fn from_address(&self, physical: Physical<AllMemory>) -> &Spinlock<Page> {
+        self.table()
+            .get(physical.frame_idx())
+            .expect("Physical address out of bounds of the metadata table")
     }
 
     /// Returns a reference to the metadata table.
@@ -438,6 +459,7 @@ impl MetadataTable {
         let mut stats = PagesStatistics::default();
         for frame in self.table().iter().map(|lock| lock.lock()) {
             match &*frame {
+                Page::FreeBuddyBlockHead { order } => stats.free += order.pages(),
                 Page::UsedBuddyBlockHead { usage, order } => {
                     if usage.is_kernel() {
                         stats.kernel += order.pages();
@@ -448,10 +470,9 @@ impl MetadataTable {
                         stats.kernel += 1;
                     }
                 }
-                Page::Free | Page::FreeBuddyBlockHead { .. } => stats.free += 1,
                 Page::Reserved => stats.reserved += 1,
                 Page::Poisoned => stats.poisoned += 1,
-                Page::BuddyBlockPage { .. } => (),
+                Page::BuddyBlockPage => (),
             }
         }
         stats.total = Count::from_pages(self.table().len());
@@ -469,13 +490,12 @@ static PAGE_METADATA: MetadataTable = MetadataTable::empty();
 /// This function should only be called once during the kernel initialization.
 #[init]
 pub unsafe fn setup() {
-    assert!(core::mem::size_of::<Page>() <= 16);
     PAGE_METADATA.setup();
-    PAGE_METADATA.statistics().print_debug_output();
+    PAGE_METADATA.statistics().print_debug();
 }
 
 /// Returns a reference to the global metadata table for physical pages.
 #[must_use]
-pub fn table() -> &'static [Spinlock<Page>] {
-    PAGE_METADATA.table()
+pub fn metadata() -> &'static MetadataTable {
+    &PAGE_METADATA
 }

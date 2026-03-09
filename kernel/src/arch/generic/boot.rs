@@ -195,9 +195,23 @@ pub fn last_regular_address() -> Physical<AllMemory> {
 /// was already reclaimed by the kernel.
 #[must_use]
 pub fn reclaim_memory() -> arch::mem::MemoryMap {
-    // TODO: Align all free regions to page boundaries
-    BOOT_MEMORY_MAP
+    let mut memmap = BOOT_MEMORY_MAP
         .lock()
         .take()
-        .expect("Boot memory map not initialized or already reclaimed")
+        .expect("Boot memory map not initialized or already reclaimed");
+
+    // Reduce the free memory regions to page-aligned blocks to ensure that
+    // partially used pages are not accidentally flagged as free memory, which
+    // could lead to memory corruption if the kernel tries to allocate from
+    // those regions later on.
+    memmap
+        .regions
+        .iter_mut()
+        .filter(|entry| entry.kind == arch::mem::MemoryKind::Free)
+        .for_each(|entry| {
+            entry.start = entry.start.align_up(PAGE_SIZE);
+            entry.end = entry.end.align_down(PAGE_SIZE);
+        });
+
+    memmap
 }

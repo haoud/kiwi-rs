@@ -5,6 +5,7 @@
 #![allow(unsafe_op_in_unsafe_fn)]
 #![feature(unsafe_cell_access)]
 #![feature(ptr_as_uninit)]
+#![feature(step_trait)]
 
 use macros::init;
 

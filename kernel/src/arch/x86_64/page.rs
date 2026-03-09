@@ -27,11 +27,17 @@ pub fn translate(physical: Physical<AllMemory>) -> Option<Virtual<Kernel>> {
 /// the HHDM, this function returns `None`.
 #[must_use]
 pub fn from_hhdm(address: Virtual<Kernel>) -> Option<Physical<AllMemory>> {
-    if address >= HHDM_BASE && address < HHDM_MAX_ADDRESS {
+    if in_hhdm(address) {
         Some(Physical::<AllMemory>::new(
             usize::from(address) - usize::from(HHDM_BASE),
         ))
     } else {
         None
     }
+}
+
+/// Check if a virtual address belongs to the HHDM (High Half Direct Mapping).
+#[must_use]
+pub fn in_hhdm(address: Virtual<Kernel>) -> bool {
+    address >= HHDM_BASE && address < HHDM_MAX_ADDRESS
 }
