@@ -7,6 +7,8 @@
 #![feature(ptr_as_uninit)]
 #![feature(step_trait)]
 
+extern crate alloc;
+
 use macros::init;
 
 pub mod arch;
@@ -25,6 +27,7 @@ pub mod mm;
 pub unsafe fn main() -> ! {
     mm::page::setup();
     mm::buddy::setup();
+    mm::heap::setup();
 
     log::info!("Boot completed !");
     arch::cpu::freeze();
