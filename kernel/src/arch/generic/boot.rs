@@ -167,11 +167,11 @@ pub fn allocate_slice_from_fn<T, F: Fn() -> T>(count: usize, f: F) -> &'static m
     unsafe { core::slice::from_raw_parts_mut(data, count) }
 }
 
-/// Find the last regular physical address in the system. This is the highest
+/// Get the last regular physical address in the system. This is the highest
 /// physical address that is not reserved for special purposes (e.g. MMIO, APIC
 /// etc.) and can be used for normal memory allocations. This is useful for
-/// setting up the page tables and the physical memory manager, since we need to
-/// know the maximum physical address that we can use for memory allocations.
+/// setting up the page tables and the physical memory manager, since we need
+/// to know the maximum physical address usable for memory allocations.
 ///
 /// # Panics
 /// Panics if the boot memory map has not been initialized or if the boot memory

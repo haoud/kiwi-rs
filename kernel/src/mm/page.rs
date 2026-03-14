@@ -5,7 +5,7 @@ use macros::init;
 use crate::{
     arch::{
         self,
-        addr::{AllMemory, Physical},
+        addr::{AllMemory, PAGE_SIZE, Physical},
     },
     library::lock::spin::Spinlock,
     mm::{buddy, page},
@@ -363,7 +363,10 @@ impl MetadataTable {
     #[init]
     pub unsafe fn setup(&'static self) {
         let producer = || Spinlock::new(Page::Poisoned);
-        let count = arch::boot::last_regular_address().frame_idx();
+        let count = arch::boot::last_regular_address()
+            .align_up(PAGE_SIZE)
+            .frame_index()
+            .value();
 
         // Allocate a slice of metadata entries for all physical pages in the
         // system then reclaim the boot memory map to populate the metadata for
@@ -389,8 +392,8 @@ impl MetadataTable {
         for entry in &mmap.regions {
             for mut frame in table
                 .iter_mut()
-                .take(entry.end.frame_idx())
-                .skip(entry.start.frame_idx())
+                .take(entry.end.frame_index().value())
+                .skip(entry.start.frame_index().value())
                 .map(|lock| lock.lock())
             {
                 match entry.kind {
@@ -426,7 +429,7 @@ impl MetadataTable {
     /// given address is out of bounds of the metadata table, returns `None`.
     #[must_use]
     pub fn try_from_address(&self, physical: Physical<AllMemory>) -> Option<&Spinlock<Page>> {
-        self.table().get(physical.frame_idx())
+        self.table().get(physical.frame_index().value())
     }
 
     /// Get the metadata for the physical page at the given address.
@@ -436,7 +439,7 @@ impl MetadataTable {
     #[must_use]
     pub fn from_address(&self, physical: Physical<AllMemory>) -> &Spinlock<Page> {
         self.table()
-            .get(physical.frame_idx())
+            .get(physical.frame_index().value())
             .expect("Physical address out of bounds of the metadata table")
     }
 

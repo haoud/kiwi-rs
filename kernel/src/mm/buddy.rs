@@ -368,7 +368,7 @@ impl FreeListNode {
         unsafe {
             NonNull::new_unchecked(
                 (core::ptr::from_ref::<Self>(self).addr()
-                    ^ (1 << (usize::from(order.0) + PAGE_SHIFT))) as *mut Self,
+                    ^ (1 << (usize::from(order) + PAGE_SHIFT))) as *mut Self,
             )
         }
     }
