@@ -34,7 +34,7 @@ impl Deref for LockedHeap {
 unsafe impl GlobalAlloc for LockedHeap {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         self.0
-            .lock()
+            .lock_irq_safe()
             .allocate_first_fit(layout)
             .ok()
             .map_or(core::ptr::null_mut(), core::ptr::NonNull::as_ptr)
@@ -42,7 +42,7 @@ unsafe impl GlobalAlloc for LockedHeap {
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         self.0
-            .lock()
+            .lock_irq_safe()
             .deallocate(NonNull::new_unchecked(ptr), layout);
     }
 }

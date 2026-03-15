@@ -16,10 +16,7 @@
                         "enable": true
                     }
                 },
-                "linkedProjects": [
-                    "crates/kiwi-seqlock/Cargo.toml",
-                    "kernel/Cargo.toml"
-                ]
+                "linkedProjects": ["kernel/Cargo.toml"]
             }
         }
     },

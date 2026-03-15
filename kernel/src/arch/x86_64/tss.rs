@@ -59,5 +59,5 @@ pub unsafe fn setup() {
 /// should be properly aligned, big enough and accessible from both read and
 /// write operations.
 pub unsafe fn set_kernel_stack(rsp: u64) {
-    TSS.local().lock().stacks[0] = rsp;
+    TSS.local().lock_irq_safe().stacks[0] = rsp;
 }

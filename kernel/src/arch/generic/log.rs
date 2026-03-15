@@ -24,7 +24,7 @@ impl log::Log for Logger {
                 log::Level::Debug => "\x1B[1m\x1b[34m[#]\x1b[0m",
                 log::Level::Trace => "\x1B[1m\x1b[35m[~]\x1b[0m",
             };
-            _ = writeln!(LOGGER.lock(), "{} {}", level, record.args());
+            _ = writeln!(LOGGER.lock_irq_safe(), "{} {}", level, record.args());
         }
     }
 

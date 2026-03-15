@@ -339,7 +339,7 @@ impl FreeListNode {
     /// block is still in use.
     #[must_use]
     pub fn free_block_at(physical: Physical<AllMemory>) -> NonNull<Self> {
-        let mut page = page::metadata().from_address(physical).lock();
+        let mut page = page::metadata().from_address(physical).lock_irq_safe();
         if let Page::UsedBuddyBlockHead {
             ref mut usage,
             order,
@@ -464,11 +464,11 @@ pub fn allocate(requested_order: Order, flags: AllocationFlags) -> Option<Physic
             .iter()
             .skip(usize::from(requested_order))
             .find_map(|free_list| {
-                let mut free_list = free_list.lock();
+                let mut free_list = free_list.lock_irq_safe();
                 let mut node = free_list.pop()?;
                 page::metadata()
                     .from_address(node.as_mut().physical_head())
-                    .lock()
+                    .lock_irq_safe()
                     .change_state(Page::UsedBuddyBlockHead {
                         usage: page::UsageMetadata::used(kernel),
                         order: requested_order,
@@ -486,7 +486,7 @@ pub fn allocate(requested_order: Order, flags: AllocationFlags) -> Option<Physic
         // splitting the block to prevent a race condition where another thread
         // could merge the block with its buddy block after we split it but
         // before we push the buddy block onto the free list.
-        let mut free_list = get_free_list(i).lock();
+        let mut free_list = get_free_list(i).lock_irq_safe();
         let node = {
             // SAFETY: The next block is guaranteed to be valid, properly aligned
             // and can be safely converted to a mutable reference since the buddy
@@ -502,7 +502,7 @@ pub fn allocate(requested_order: Order, flags: AllocationFlags) -> Option<Physic
             // Get the page corresponding to the newly created buddy block and
             // update its metadata to reflect that it is now the head of a buddy
             // block of order `i`.
-            let mut page = page::metadata().from_address(physical).lock();
+            let mut page = page::metadata().from_address(physical).lock_irq_safe();
             if let Page::BuddyBlockPage = *page {
                 page.change_state(Page::FreeBuddyBlockHead { order: i });
             } else {
@@ -572,7 +572,7 @@ pub fn free(physical: Physical<AllMemory>) {
             // buddy block.
             page::metadata()
                 .from_address(buddy.physical_head())
-                .lock()
+                .lock_irq_safe()
                 .change_state(Page::BuddyBlockPage);
             order = order.next();
         }
@@ -590,10 +590,10 @@ pub fn free(physical: Physical<AllMemory>) {
     // block while updating the page metadata of the block's head page to
     // avoid races conditions where another thread could try to coalesce the
     // block with its buddy block before we update the page metadata.
-    let mut free_list = get_free_list(order).lock();
+    let mut free_list = get_free_list(order).lock_irq_safe();
     page::metadata()
         .from_address(base)
-        .lock()
+        .lock_irq_safe()
         .change_state(Page::FreeBuddyBlockHead { order });
 
     // SAFETY: The node is properly initialized and correctly aligned, not
@@ -637,7 +637,7 @@ fn can_coalesce(
     let addr = buddy_address(physical, allocation_order);
     let bucket = get_free_list(allocation_order).lock_irq_safe();
     if let Some(buddy) = page::metadata().try_from_address(addr)
-        && let Page::FreeBuddyBlockHead { order } = *buddy.lock()
+        && let Page::FreeBuddyBlockHead { order } = *buddy.lock_irq_safe()
         && order == allocation_order
     {
         return Some(bucket);

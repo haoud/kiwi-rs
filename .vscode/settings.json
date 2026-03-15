@@ -4,10 +4,7 @@
     "rust-analyzer.check.allTargets": false,
     "rust-analyzer.check.command": "clippy",
     "rust-analyzer.cargo.target": "x86_64-unknown-none",
-    "rust-analyzer.linkedProjects": [
-        "crates/kiwi-seqlock/Cargo.toml",
-        "kernel/Cargo.toml"
-    ],
+    "rust-analyzer.linkedProjects": ["kernel/Cargo.toml"],
     "editor.semanticTokenColorCustomizations": {
         "enabled": false
     }
