@@ -9,7 +9,6 @@ members = [
 ]
 
 [workspace.dependencies]
-seqlock = { path = "../crates/kiwi-seqlock", package = "kiwi-seqlock" }
 macros = { path = "crates/macros" }
 
 zerocopy = { version = "0.8", features = ["alloc", "derive"] }
@@ -29,7 +28,6 @@ usize_cast = { workspace = true }
 arrayvec = { workspace = true }
 bitfield = { workspace = true }
 bitflags = { workspace = true }
-seqlock = { workspace = true }
 macros = { workspace = true }
 log = { workspace = true }
 

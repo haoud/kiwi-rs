@@ -22,18 +22,18 @@
 //! kernel, and should be safe in practice. The unsoundness is a known issue,
 //! and will be fixed in a future version of the crate, maybe when atomic
 //! memcpy will be available in Rust.
-#![no_std]
-
 use core::{
     cell::UnsafeCell,
     mem::MaybeUninit,
     sync::atomic::{AtomicUsize, Ordering},
 };
 
+use crate::library::lock::spin::Spinlock;
+
 /// A sequential lock
 pub struct Seqlock<T> {
     data: UnsafeCell<T>,
-    spin: spin::Mutex<()>,
+    spin: Spinlock<()>,
     seq: AtomicUsize,
 }
 
@@ -52,7 +52,7 @@ impl<T: Copy> Seqlock<T> {
         Self {
             data: UnsafeCell::new(data),
             seq: AtomicUsize::new(0),
-            spin: spin::Mutex::new(()),
+            spin: Spinlock::new(()),
         }
     }
 
