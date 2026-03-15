@@ -17,7 +17,6 @@ arrayvec = { version = "0.7", default-features = false }
 usize_cast = "1.1"
 bitfield = "0.19"
 bitflags = "2.11"
-spin = "0.10.0"
 log = "0.4"
 
 [workspace.lints.clippy]
@@ -32,11 +31,10 @@ bitfield = { workspace = true }
 bitflags = { workspace = true }
 seqlock = { workspace = true }
 macros = { workspace = true }
-spin = { workspace = true }
 log = { workspace = true }
 
 # Until we implement a slub allocator
-linked_list_allocator = "0.10"
+linked_list_allocator = { version = "0.10", default-features = false }
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
 limine = { version = "0.5" }

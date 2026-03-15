@@ -1,8 +1,48 @@
 /// The state of IRQs, either enabled or disabled.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum State {
     Enabled,
     Disabled,
+}
+
+/// A guard that disables IRQs for the duration of its lifetime and restores
+/// the previous state of IRQs when dropped.
+///
+/// This is useful for ensuring that IRQs are properly disabled and re-enabled
+/// in a safe and ergonomic way.
+#[derive(Debug)]
+pub struct IrqGuard {
+    state: State,
+}
+
+impl IrqGuard {
+    /// Create a new `IrqGuard` by saving the current state of IRQs and
+    /// disabling them. Interrupts will be disabled for the duration of
+    /// the `IrqGuard`'s lifetime, and will be restored to their previous
+    /// state when the `IrqGuard` is dropped.
+    #[must_use]
+    pub fn new() -> Self {
+        let state = save_and_disable();
+        Self { state }
+    }
+}
+
+impl Default for IrqGuard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Drop for IrqGuard {
+    fn drop(&mut self) {
+        // SAFETY: We checked that IRQs were enabled before disabling them.
+        // Thus, it is safe to assume that enabling them again is safe since
+        // it should not cause any undefined behavior for the caller if they
+        // were already enabled and working correctly.
+        unsafe {
+            restore(self.state);
+        }
+    }
 }
 
 /// Enable IRQs.

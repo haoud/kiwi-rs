@@ -1,9 +1,11 @@
 use core::fmt::Write;
 
+use crate::library::lock::spin::Spinlock;
+
 /// The global logger instance. This is protected by a spinlock to ensure that
 /// only one thread can access the logger at a time, to avoid interleaving log
 /// messages.
-static LOGGER: spin::Mutex<Logger> = spin::Mutex::new(Logger {});
+static LOGGER: Spinlock<Logger> = Spinlock::new(Logger {});
 
 /// A simple logger that use the architecture's log implementation.
 struct Logger {}

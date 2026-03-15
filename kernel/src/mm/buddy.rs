@@ -8,7 +8,7 @@ use crate::{
         self,
         addr::{AllMemory, Kernel, PAGE_SHIFT, Physical, Virtual},
     },
-    library::lock::spin::Spinlock,
+    library::lock::spin::{Spinlock, SpinlockGuardIrqSafe},
     mm::page::{self, Page},
 };
 
@@ -623,7 +623,7 @@ pub fn print_debug() {
 fn can_coalesce(
     physical: Physical<AllMemory>,
     allocation_order: Order,
-) -> Option<spin::MutexGuard<'static, FreeList>> {
+) -> Option<SpinlockGuardIrqSafe<'static, FreeList>> {
     // Early return if the given `order` is the maximum order to avoid
     // unnecessary locking of the free list and other computations.
     if allocation_order.is_last() {
@@ -635,7 +635,7 @@ fn can_coalesce(
     // another thread could modify the free list after we checked if the buddy
     // block can be coalesced, potentially leading to undefined behavior.
     let addr = buddy_address(physical, allocation_order);
-    let bucket = get_free_list(allocation_order).lock();
+    let bucket = get_free_list(allocation_order).lock_irq_safe();
     if let Some(buddy) = page::metadata().try_from_address(addr)
         && let Page::FreeBuddyBlockHead { order } = *buddy.lock()
         && order == allocation_order
