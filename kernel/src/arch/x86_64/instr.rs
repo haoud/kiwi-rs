@@ -37,7 +37,7 @@ pub unsafe fn outw(port: u16, value: u16) {
 /// including causing the hardware to do something unexpected and possibly
 /// violating memory safety.
 #[inline]
-pub unsafe fn outl(port: u16, value: u32) {
+pub unsafe fn outd(port: u16, value: u32) {
     core::arch::asm!(
         "out dx, eax",
         in("dx") port,
@@ -92,7 +92,7 @@ pub unsafe fn inw(port: u16) -> u16 {
 /// violating memory safety.
 #[inline]
 #[must_use]
-pub unsafe fn inl(port: u16) -> u32 {
+pub unsafe fn ind(port: u16) -> u32 {
     let mut value: u32;
     core::arch::asm!(
         "in eax, dx",

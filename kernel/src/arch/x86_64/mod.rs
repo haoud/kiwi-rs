@@ -7,6 +7,7 @@ pub mod boot;
 pub mod cpu;
 pub mod gdt;
 pub mod instr;
+pub mod io;
 pub mod irq;
 pub mod lang;
 pub mod logging;
