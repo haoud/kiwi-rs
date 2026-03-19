@@ -14,6 +14,7 @@ pub mod logging;
 pub mod msr;
 pub mod page;
 pub mod percpu;
+pub mod pic;
 pub mod smp;
 pub mod trap;
 pub mod tss;
@@ -34,6 +35,7 @@ pub unsafe extern "C" fn start() -> ! {
     gdt::setup();
     tss::setup();
     trap::setup();
+    pic::setup();
     main();
 }
 
