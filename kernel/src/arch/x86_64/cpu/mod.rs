@@ -1,5 +1,12 @@
 use crate::arch::x86_64;
 
+pub mod cpuid;
+pub mod cr0;
+pub mod cr2;
+pub mod cr3;
+pub mod cr4;
+pub mod rflags;
+
 /// The different privilege levels of the CPU. Kiwi only use kernel (ring 0)
 /// and user (ring 3) privilege levels. Other privilege levels (ring 1 and
 /// ring 2) are not used by Kiwi as well as most operating systems.

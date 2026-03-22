@@ -1,4 +1,4 @@
-use crate::arch::x86_64;
+use crate::arch::x86_64::{self, cpu::rflags};
 
 /// Enable IRQs.
 ///
@@ -22,18 +22,5 @@ pub fn disable() {
 /// Check if IRQs are enabled on the current core.
 #[must_use]
 pub fn enabled() -> bool {
-    let rflags: u64;
-    // SAFETY: Reading the RFLAGS register should not cause any memory unsafety
-    // or any unexpected side effects. We ensure that the stack pointer remains
-    // unchanged by pushing the flags onto the stack and popping them into a
-    // register.
-    unsafe {
-        core::arch::asm!(
-            "pushfq",
-            "pop {}",
-            out(reg) rflags,
-            options(nomem, preserves_flags)
-        );
-    }
-    rflags & (1 << 9) != 0
+    x86_64::cpu::rflags::read().contains(rflags::Flags::IF)
 }

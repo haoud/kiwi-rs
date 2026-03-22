@@ -17,6 +17,9 @@ pub const PAGE_SIZE: usize = crate::arch::target::addr::PAGE_SIZE;
 /// to rapidly convert between addresses and page indices.
 pub const PAGE_SHIFT: usize = PAGE_SIZE.trailing_zeros() as usize;
 
+/// A bitmask for the offset within a page.
+pub const PAGE_MASK: usize = PAGE_SIZE - 1;
+
 /// A physical address space. This is used to represent physical addresses and
 /// to distinguish between different types of physical addresses (e.g. DMA
 /// addresses, high memory addresses...).
@@ -50,6 +53,36 @@ pub struct Kernel {}
 /// `VirtualSpace` trait for this type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct User {}
+
+/// Represents all types of virtual addresses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum VirtualAddress {
+    Kernel(Virtual<Kernel>),
+    User(Virtual<User>),
+    Invalid(usize),
+}
+
+impl VirtualAddress {
+    /// Create a new `VirtualAddress` from a raw address. This will determine
+    /// whether the address belongs to the kernel virtual address space, the
+    /// user virtual address space, or neither, and will return the appropriate
+    /// variant of `VirtualAddress`.
+    #[must_use]
+    pub const fn new(addr: usize) -> Self {
+        if let Some(addr) = Virtual::<Kernel>::try_new(addr) {
+            Self::Kernel(addr)
+        } else if let Some(addr) = Virtual::<User>::try_new(addr) {
+            Self::User(addr)
+        } else {
+            Self::Invalid(addr)
+        }
+    }
+}
+
+/// Represents an invalid virtual address. This is used to represent addresses
+/// that are not in the virtual address space of any `VirtualSpace`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct InvalidVirtual(pub usize);
 
 /// A virtual address in the address space `T`. This type ensures that virtual
 ///  addresses are always valid in their respective address space.
