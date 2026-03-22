@@ -1,14 +1,14 @@
 use macros::init;
 
-use crate::arch::x86_64::io::{Port, Write};
+use crate::arch::x86_64::io::{InlinePort, Write};
 
 /// The base IRQ number for the PICs
 pub const IRQ_BASE: u8 = 32;
 
-static MASTER_PIC_CMD: Port<u8, Write> = Port::new(0x20);
-static MASTER_PIC_DATA: Port<u8, Write> = Port::new(0x21);
-static SLAVE_PIC_CMD: Port<u8, Write> = Port::new(0xA0);
-static SLAVE_PIC_DATA: Port<u8, Write> = Port::new(0xA1);
+static MASTER_PIC_CMD: InlinePort<0x20, u8, Write> = InlinePort::new();
+static MASTER_PIC_DATA: InlinePort<0x21, u8, Write> = InlinePort::new();
+static SLAVE_PIC_CMD: InlinePort<0xA0, u8, Write> = InlinePort::new();
+static SLAVE_PIC_DATA: InlinePort<0xA1, u8, Write> = InlinePort::new();
 
 /// Setup the programmable interrupt controllers (PICs) to remap the IRQs to
 /// a free range of interrupt numbers (by default, the PICs use interrupt

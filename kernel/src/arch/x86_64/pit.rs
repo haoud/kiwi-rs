@@ -1,4 +1,4 @@
-use crate::arch::x86_64::io::{Port, ReadWrite, Write};
+use crate::arch::x86_64::io::{InlinePort, Port, ReadWrite, Write};
 
 /// The internal frequency of the PIT, in Hz. This is the frequency of the
 /// internal oscillator that drives the PIT, and is used to calculate the
@@ -46,11 +46,12 @@ pub enum OperatingMode {
     OneShot = 0b001 << 1,
 }
 
+static SCP_B: InlinePort<0x61, u8, ReadWrite> = InlinePort::new();
+static CMD: InlinePort<0x43, u8, Write> = InlinePort::new();
+
 static CHANNEL0: Port<u8, ReadWrite> = Port::new(0x40);
 static CHANNEL1: Port<u8, ReadWrite> = Port::new(0x41);
 static CHANNEL2: Port<u8, ReadWrite> = Port::new(0x42);
-static CMD: Port<u8, Write> = Port::new(0x43);
-static SCP_B: Port<u8, ReadWrite> = Port::new(0x61);
 
 /// Configure the channel 2 of the PIT to generate a one-shot timer that will
 /// trigger after `ms` milliseconds since the function is called.

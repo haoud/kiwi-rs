@@ -134,7 +134,16 @@ impl From<Timeout> for u32 {
 /// polling a port.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Poll {
+    /// Check if the value read from the port is strictly equal to the
+    /// specified value.
+    Value,
+
+    /// Check if all the bits specified by the mask are clear in the value read
+    /// from the port without checking the other bits.
     Clear,
+
+    /// Check if all the bits specified by the mask are set in the value read
+    /// from the port without checking the other bits.
     Set,
 }
 
@@ -146,9 +155,206 @@ pub enum PollResult {
     Failure,
 }
 
-/// Represents a port that can be read from and/or written to, depending on the
-/// access type `A`. This is a wrapper around a port number and a type that
-/// implements the `IO` trait (currently `u8`, `u16`, or `u32`).
+/// Represents a port at the specified port number `P` that can be read from
+/// and/or written to, depending on the access type `A`.
+///
+/// The main difference between this and the `Port` struct is that this struct
+/// uses a const generic parameter for the port number, which allows the port
+/// number to be specified at compile time and potentially optimized by the
+/// compiler (allowing true zero-cost abstractions), while the `Port` struct
+/// uses a regular field for the port number, which allows the port number to
+/// be specified at runtime but may not be optimized as well by the compiler.
+///
+/// Depending on the use case, one may be more suitable than the other, but
+/// you should generally prefer `InlinePort` when possible.
+///
+/// # Example
+/// See the code in `pit.rs` for an example of using `InlinePort` and `Port`
+/// together, where `InlinePort` is used for the command port which is known
+/// at compile time, while `Port` is used for channel ports which are
+/// selected at runtime based on the channel number.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct InlinePort<const P: u16, T, A> {
+    phantom: PhantomData<(T, A)>,
+}
+
+impl<const P: u16, T: IO, A: Access> InlinePort<P, T, A> {
+    /// Create a new port.
+    ///
+    /// This function is safe because it does not access any hardware but
+    /// rather simply encapsulates a port number, a type that implements
+    /// the `IO` trait and an access type.
+    #[must_use]
+    pub const fn new() -> InlinePort<P, T, A> {
+        InlinePort {
+            phantom: PhantomData,
+        }
+    }
+}
+
+impl<const P: u16, T: IO, A: ReadAccess> InlinePort<P, T, A> {
+    /// Read a value from the port and then pause for a short time. This is
+    /// useful for reading from ports that require a short delay after reading
+    /// in order to let enough time pass for the hardware to process the read.
+    ///
+    /// # Safety
+    /// This function is unsafe because reading from a port can have side
+    /// effects that can cause the hardware to do something unexpected,
+    /// including violating memory safety. The caller must ensure that reading
+    /// from the port is safe and will not cause any undefined behavior.
+    #[must_use]
+    pub unsafe fn read_and_pause(&self) -> T {
+        let data = T::read(P);
+        pause();
+        data
+    }
+
+    /// Read a value from the port.
+    ///
+    /// # Safety
+    /// This function is unsafe because reading from a port can have side
+    /// effects that can cause the hardware to do something unexpected,
+    /// including violating memory safety. The caller must ensure that reading
+    /// from the port is safe and will not cause any undefined behavior.
+    #[must_use]
+    pub unsafe fn read(&self) -> T {
+        T::read(P)
+    }
+
+    /// Poll a port once by reading its value and checking if all the bits
+    /// specified by the mask are set or clear, depending on the value of
+    /// `poll`.
+    ///
+    /// Returns `PollResult::Success` if the condition is met, otherwise
+    /// returns `PollResult::Failure`.
+    ///
+    /// # Safety
+    /// This function is unsafe because reading from a port can have side
+    /// effects that can cause the hardware to do something unexpected,
+    /// including violating memory safety. The caller must ensure that
+    /// reading from the port is safe and does not cause any undefined
+    /// behavior.
+    pub unsafe fn poll_once(&self, bits: T, poll: Poll) -> PollResult {
+        let data = T::read(P);
+        let success = match poll {
+            Poll::Value => data == bits,
+            Poll::Clear => (data & bits) == T::ZERO,
+            Poll::Set => (data & bits) == bits,
+        };
+
+        if success {
+            PollResult::Success
+        } else {
+            PollResult::Failure
+        }
+    }
+
+    /// Poll a port by repeatedly reading its value and checking if all the
+    /// bits specified by the mask are set or clear, depending on the value of
+    /// `poll`, until the condition is met. If a timeout is specified, the
+    /// function will return after the specified number of iterations even if the
+    /// condition is not met.
+    ///
+    /// If `timeout` is `None`, the function will poll indefinitely until the
+    /// condition is met.
+    ///
+    /// Returns `PollResult::Success` if the condition is met, otherwise
+    /// returns `PollResult::Timeout` if the timeout is reached.
+    ///
+    /// # Safety
+    /// This function is unsafe because reading from a port can have side
+    /// effects that can cause the hardware to do something unexpected,
+    /// including violating memory safety. The caller must ensure that
+    /// reading from the port is safe and will not cause any undefined
+    /// behavior.
+    pub unsafe fn poll_until(&self, bits: T, poll: Poll, timeout: Timeout) -> PollResult {
+        for _ in 0..u32::from(timeout) {
+            match self.poll_once(bits, poll) {
+                PollResult::Success => return PollResult::Success,
+                PollResult::Timeout => unreachable!(),
+                PollResult::Failure => (),
+            }
+            core::hint::spin_loop();
+        }
+
+        PollResult::Timeout
+    }
+}
+
+impl<const P: u16, T: IO, A: WriteAccess> InlinePort<P, T, A> {
+    /// Write a value to the port, then pause for a short time. This is useful
+    /// for writing to ports that require a short delay after writing in order
+    /// to let enough time pass for the hardware to process the write.
+    ///
+    /// # Safety
+    /// This function is unsafe because writing to a port can have side effects
+    /// that can cause the hardware to do something unexpected, including
+    /// violating memory safety. The caller must ensure that writing to the
+    /// specified port with the specified value is safe and does not cause any
+    /// unintended consequences.
+    pub unsafe fn write_and_pause(&self, value: T) {
+        T::write(P, value);
+        pause();
+    }
+
+    /// Write a value to the port.
+    ///
+    /// # Safety
+    /// This function is unsafe because writing to a port can have side effects
+    /// that can cause the hardware to do something unexpected, including
+    /// violating memory safety. The caller must ensure that writing to the
+    /// specified port with the specified value is safe and does not cause any
+    /// unintended consequences.
+    pub unsafe fn write(&self, value: T) {
+        T::write(P, value);
+    }
+}
+
+impl<const P: u16, T: IO, A: ReadAccess + WriteAccess> InlinePort<P, T, A> {
+    /// Clear the specified bits in the port by reading the current value and
+    /// writing back the value with the specified bits cleared.
+    ///
+    /// # Safety
+    /// This function is unsafe because reading from and writing to a port can
+    /// have side effects that can cause the hardware to do something unexpected,
+    /// including violating memory safety. The caller must ensure that reading
+    /// from and writing to the specified port with the specified value is safe
+    /// and does not cause any unintended consequences.
+    pub unsafe fn clear_bits(&self, bits: T) {
+        let data = T::read(P);
+        T::write(P, data & !bits);
+    }
+
+    /// Set the specified bits in the port by reading the current value and
+    /// writing back the value with the specified bits set.
+    ///
+    /// # Safety
+    /// This function is unsafe because reading from and writing to a port can
+    /// have side effects that can cause the hardware to do something unexpected,
+    /// including violating memory safety. The caller must ensure that reading
+    /// from and writing to the specified port with the specified value is safe
+    /// and does not cause any unintended consequences.
+    pub unsafe fn set_bits(&self, bits: T) {
+        let data = T::read(P);
+        T::write(P, data | bits);
+    }
+}
+
+impl<const P: u16, T: IO, A: Access> Default for InlinePort<P, T, A> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Represents a port at the specified port number that can be read from and/or
+/// written to, depending on the access type `A`.
+///
+/// The main difference between this and the `InlinePort` struct is that this
+/// structure uses a regular field for the port number, which allows the port
+/// number to be specified at runtime but may not be optimized as well by the
+/// compiler. See the documentation for `InlinePort` for more details on the
+/// differences between the two structs and when one may be more suitable than
+/// the other.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Port<T, A> {
     phantom: PhantomData<(T, A)>,
@@ -215,6 +421,7 @@ impl<T: IO, A: ReadAccess> Port<T, A> {
     pub unsafe fn poll_once(&self, bits: T, poll: Poll) -> PollResult {
         let data = T::read(self.port);
         let success = match poll {
+            Poll::Value => data == bits,
             Poll::Clear => (data & bits) == T::ZERO,
             Poll::Set => (data & bits) == bits,
         };
@@ -251,6 +458,7 @@ impl<T: IO, A: ReadAccess> Port<T, A> {
                 PollResult::Timeout => unreachable!(),
                 PollResult::Failure => (),
             }
+            core::hint::spin_loop();
         }
 
         PollResult::Timeout
