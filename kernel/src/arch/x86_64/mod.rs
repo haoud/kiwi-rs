@@ -15,6 +15,7 @@ pub mod msr;
 pub mod page;
 pub mod percpu;
 pub mod pic;
+pub mod pit;
 pub mod smp;
 pub mod trap;
 pub mod tss;
