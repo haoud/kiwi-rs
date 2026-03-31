@@ -45,6 +45,16 @@ impl Drop for IrqGuard {
     }
 }
 
+/// Wait for an interrupt.
+///
+/// Depending on the architecture, this function may not work correctly if IRQs
+/// are disabled and may wait indefinitely for an interrupt that will never
+/// arrive. Therefore, it is advised to only call this function when IRQs are
+/// enabled and working correctly.
+pub fn wait() {
+    crate::arch::target::irq::wait();
+}
+
 /// Enable IRQs.
 ///
 /// # Safety

@@ -30,5 +30,8 @@ pub unsafe fn main() -> ! {
     mm::heap::setup();
 
     log::info!("Boot completed !");
-    arch::cpu::freeze();
+    arch::irq::enable();
+    loop {
+        arch::irq::wait();
+    }
 }

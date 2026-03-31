@@ -61,10 +61,10 @@ static CHANNEL2: Port<u8, ReadWrite> = Port::new(0x42);
 /// the speaker's functionality.
 ///
 /// # Panics
-/// Panics if `ms` is not in the range (0, 100).
+/// Panics if `ms` is not in the range (0, 50).
 #[allow(clippy::cast_possible_truncation)]
 pub fn prepare_sleep(ms: usize) {
-    assert!(ms < 100, "ms must be less than 100");
+    assert!(ms <= 50, "ms must be less than or equal to 50");
     assert!(ms > 0, "ms must be greater than 0");
     let counter = (ms * 1_000_000) / PIT_TICK_NS;
 

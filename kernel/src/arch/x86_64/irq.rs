@@ -1,5 +1,13 @@
 use crate::arch::x86_64::{self, cpu::rflags};
 
+/// Wait for the next IRQ by halting the CPU until an interrupt is received.
+///
+/// If interrupts are disabled, this function will halt indefinitely until a
+/// non-maskable interrupt (NMI) is received.
+pub fn wait() {
+    x86_64::instr::hlt();
+}
+
 /// Enable IRQs.
 ///
 /// # Safety

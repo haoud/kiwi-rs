@@ -5,3 +5,18 @@
 /// isn't designed to scale to a large number of CPUs since it targets desktop
 /// systems, which typically don't have more than 64 CPUs.
 pub const MAX_CPUS: usize = 64;
+
+/// The timer frequency in Hz. This is a compile-time constant that can be
+/// adjusted as needed:
+/// - A higher frequency will allow for more precise timing and better
+///   responsiveness, but will also increase the CPU usage and reduce battery
+///   life on laptops. This is ideal for desktop systems or soft real-time
+///   systems that require high precision and responsiveness.
+/// - A lower frequency will reduce the CPU usage and increase battery life
+///   but will also reduce the precision of the timer and the responsiveness
+///   of the system. This is ideal for servers and embedded systems that don't
+///   require high precision and responsiveness.
+///
+/// Since Kiwi targets desktop systems, a good default value is 1000 Hz, which
+/// provides a good balance between precision and performance.
+pub const TIMER_HZ: u32 = 1000;

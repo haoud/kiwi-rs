@@ -28,6 +28,7 @@ usize_cast = { workspace = true }
 arrayvec = { workspace = true }
 bitfield = { workspace = true }
 bitflags = { workspace = true }
+zerocopy = { workspace = true }
 macros = { workspace = true }
 log = { workspace = true }
 

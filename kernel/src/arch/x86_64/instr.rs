@@ -124,14 +124,15 @@ pub unsafe fn sti() {
     core::arch::asm!("sti", options(nomem, nostack, preserves_flags));
 }
 
-/// Halt the CPU until the next interrupt arrives.
-///
-/// # Safety
-/// This function is unsafe because halting the CPU can have side effects,
-/// especially if the interrupts are not enabled (hang the CPU forever).
+/// Halt the CPU until the next interrupt arrives. If interrupts are disabled,
+/// this will halt the CPU until the next non-maskable interrupt (NMI) arrives.
 #[inline]
-pub unsafe fn hlt() {
-    core::arch::asm!("hlt", options(nomem, nostack, preserves_flags));
+pub fn hlt() {
+    // SAFETY: The hlt instruction is supported on all x86_64 CPUs and does not
+    // have any side effects that could lead to memory unsafety.
+    unsafe {
+        core::arch::asm!("hlt", options(nomem, nostack, preserves_flags));
+    }
 }
 
 /// Improve the CPU performance of spinlock loops. The processor uses this hint

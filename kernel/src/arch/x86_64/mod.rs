@@ -3,6 +3,7 @@ use macros::init;
 use crate::{arch, main};
 
 pub mod addr;
+pub mod apic;
 pub mod boot;
 pub mod cpu;
 pub mod gdt;
@@ -32,11 +33,17 @@ pub unsafe extern "C" fn start() -> ! {
     arch::log::setup();
     arch::boot::setup();
     arch::percpu::setup();
-    smp::setup();
     gdt::setup();
     tss::setup();
     trap::setup();
     pic::setup();
+    apic::setup();
+
+    apic::io::setup();
+    apic::local::setup();
+    apic::local::timer::setup();
+
+    smp::setup();
     main();
 }
 
@@ -66,6 +73,13 @@ unsafe extern "C" fn ap_start(cpu: &limine::mp::Cpu) -> ! {
     tss::setup();
     trap::setup();
 
+    apic::local::setup();
+    apic::local::timer::setup();
     log::debug!("CPU {cpu_id} has completed its setup !");
-    arch::cpu::freeze();
+
+    // Enable interrupts and wait for them to arrive
+    arch::irq::enable();
+    loop {
+        arch::irq::wait();
+    }
 }

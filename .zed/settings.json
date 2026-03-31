@@ -4,21 +4,20 @@
             "initialization_options": {
                 "cargo": {
                     "target": "x86_64-unknown-none",
-                    "allTargets": false
                 },
                 "check": {
+                    "command": "clippy",
                     "allTargets": false,
-                    "command": "clippy"
                 },
                 "procMacro": {
                     "enable": true,
                     "attributes": {
-                        "enable": true
-                    }
+                        "enable": true,
+                    },
                 },
-                "linkedProjects": ["kernel/Cargo.toml"]
-            }
-        }
+                "linkedProjects": ["kernel/Cargo.toml"],
+            },
+        },
     },
-    "tab_size": 4
+    "tab_size": 4,
 }

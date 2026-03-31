@@ -3,7 +3,7 @@ use core::sync::atomic::{AtomicBool, Ordering};
 use macros::init;
 
 use crate::{
-    arch::x86_64::{self, gdt},
+    arch::x86_64::{self, cpu::InterruptFrame, gdt},
     library::lock::spin::Spinlock,
 };
 
@@ -158,4 +158,14 @@ pub unsafe fn setup() {
 /// but it is not intended to be used by other Rust code. This is why it is
 /// marked as `unsafe`: calling this function directly from Rust code is UB.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn trap_handler() {}
+pub unsafe extern "C" fn trap_handler(frame: &mut InterruptFrame) {
+    let vector = (frame.data & 0xFF) as u8;
+    match vector {
+        32 => {
+            x86_64::apic::local::timer::handle_irq();
+        }
+        _ => {
+            log::warn!("Unknown interrupt: {}", vector);
+        }
+    }
+}
