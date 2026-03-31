@@ -6,7 +6,7 @@ use crate::{
         apic::{self, local::Register},
     }},
     config,
-    library::lock::{seq::Seqlock, spin::Spinlock},
+    library::lock::seq::Seqlock,
 };
 
 /// The base IRQ vector for the Local APIC timer.
@@ -56,26 +56,16 @@ pub unsafe fn setup() {
 /// of the kernel.
 #[init]
 pub unsafe fn calibrate() {
-    // Acquire the calibration lock to ensure that only one core performs the
-    // calibration at a time, as the calibration process involves using the PIT
-    // which is a shared resource among all cores, and we want to avoid multiple
-    // cores interfering with each other's calibration process which could lead
-    // to inaccurate results.
-    // The PIT abstraction is bad and should be redesigned to allow multiple
-    // concurrent users without interference.
-    static CALIBRATION_LOCK: Spinlock<()> = Spinlock::new(());
-    let _calibration_lock = CALIBRATION_LOCK.lock();
-
     // Perform a sleep of 50 milliseconds using the PIT, and measure the
     // number of ticks elapsed in the Local APIC timer during that time.
     // We must sleep for a sufficiently long time since Kiwi is mainly used
     // inside a VM, and the Local APIC timer frequency is very high and the
     // calibration can be greatly affected by the scheduling of the VM. By
     // sleeping for a long time, we can mitigate that effect.
-    x86_64::pit::prepare_sleep(50);
+    let sleep_token = x86_64::pit::prepare_sleep(50);
     apic::local::write_register(Register::DIVIDE_CONFIGURATION, 0b0011);
     apic::local::write_register(Register::INITIAL_COUNT, u32::MAX);
-    x86_64::pit::perform_sleep();
+    x86_64::pit::perform_sleep(sleep_token);
 
     let elapsed = u32::MAX - apic::local::read_register(Register::CURRENT_COUNT);
     let frequency = elapsed * 20;

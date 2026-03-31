@@ -1,4 +1,4 @@
-use crate::arch::x86_64::io::{InlinePort, Port, ReadWrite, Write};
+use crate::{arch::x86_64::io::{InlinePort, Port, ReadWrite, Write}, library::lock::spin::{Spinlock, SpinlockGuardIrqSafe}};
 
 /// The internal frequency of the PIT, in Hz. This is the frequency of the
 /// internal oscillator that drives the PIT, and is used to calculate the
@@ -46,6 +46,19 @@ pub enum OperatingMode {
     OneShot = 0b001 << 1,
 }
 
+/// A token that represents the lock on the sleep functionality. This token is
+/// used to ensure that only one thread can perform a sleep operation at a time
+/// because the PIT is a shared resource and can only be configured for one
+/// sleep operation at a time.
+#[allow(unused)]
+pub struct SleepToken<'a>(SpinlockGuardIrqSafe<'a, ()>);
+
+/// A spinlock to protect the sleep functionality. This lock is used to ensure
+/// that only one core can perform a sleep operation at a time because the PIT
+/// is a shared resource and can only be configured for one sleep operation at
+/// a time.
+static SLEEP_LOCK: Spinlock<()> = Spinlock::new(());
+
 static SCP_B: InlinePort<0x61, u8, ReadWrite> = InlinePort::new();
 static CMD: InlinePort<0x43, u8, Write> = InlinePort::new();
 
@@ -55,6 +68,8 @@ static CHANNEL2: Port<u8, ReadWrite> = Port::new(0x42);
 
 /// Configure the channel 2 of the PIT to generate a one-shot timer that will
 /// trigger after `ms` milliseconds since the function is called.
+/// If the PIT is already configured for a sleep operation, this function will
+/// block until the previous sleep operation is completed.
 ///
 /// This function should not be called if the PC speaker is in use, as it will
 /// disable the speaker and disable the timer 2 gate, which may interfere with
@@ -63,9 +78,10 @@ static CHANNEL2: Port<u8, ReadWrite> = Port::new(0x42);
 /// # Panics
 /// Panics if `ms` is not in the range (0, 50).
 #[allow(clippy::cast_possible_truncation)]
-pub fn prepare_sleep(ms: usize) {
+pub fn prepare_sleep(ms: usize) -> SleepToken<'static> {
     assert!(ms <= 50, "ms must be less than or equal to 50");
     assert!(ms > 0, "ms must be greater than 0");
+    let token = SleepToken(SLEEP_LOCK.lock_irq_safe());
     let counter = (ms * 1_000_000) / PIT_TICK_NS;
 
     // Clear the speaker bit (bit 0) and the timer 2 gate bit (bit 1) in the
@@ -80,6 +96,7 @@ pub fn prepare_sleep(ms: usize) {
 
     write_command(Channel::Ch2, Access::LoHibyte, OperatingMode::OneShot);
     write_channel(Channel::Ch2, counter as u16);
+    token
 }
 
 /// Perform a sleep after the PIT has been configured with [`prepare_sleep`].
@@ -88,19 +105,9 @@ pub fn prepare_sleep(ms: usize) {
 /// channel 2. If no call to `prepare_sleep` has been made, the behavior of
 /// this function is undefined, and may block indefinitely or return
 /// immediately depending on the state of the PIT.
-pub fn perform_sleep() {
+pub fn perform_sleep(_token: SleepToken<'static>) {
     while read_counter(Channel::Ch2) > 0 {
         core::hint::spin_loop();
-    }
-}
-
-/// Get the port associated with the specified PIT channel.
-#[must_use]
-fn get_channel_port(channel: Channel) -> &'static Port<u8, ReadWrite> {
-    match channel {
-        Channel::Ch0 => &CHANNEL0,
-        Channel::Ch1 => &CHANNEL1,
-        Channel::Ch2 => &CHANNEL2,
     }
 }
 
@@ -111,7 +118,7 @@ fn get_channel_port(channel: Channel) -> &'static Port<u8, ReadWrite> {
 /// port to construct the full 16-bit counter value. Using a latch command
 /// allows to read the counter value properly without worrying about the
 /// counter changing between reading the low byte and the high byte.
-///
+/// 
 /// This function relies on reading and writing to I/O ports and should be used
 /// with caution since I/O port operations are slow on `x86_64`.
 #[must_use]
@@ -126,6 +133,16 @@ pub fn read_counter(channel: Channel) -> u16 {
         let lo = port.read();
         let hi = port.read();
         (u16::from(hi) << 8) | u16::from(lo)
+    }
+}
+
+/// Get the port associated with the specified PIT channel.
+#[must_use]
+fn get_channel_port(channel: Channel) -> &'static Port<u8, ReadWrite> {
+    match channel {
+        Channel::Ch0 => &CHANNEL0,
+        Channel::Ch1 => &CHANNEL1,
+        Channel::Ch2 => &CHANNEL2,
     }
 }
 
