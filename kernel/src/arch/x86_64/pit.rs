@@ -1,4 +1,7 @@
-use crate::{arch::x86_64::io::{InlinePort, Port, ReadWrite, Write}, library::lock::spin::{Spinlock, SpinlockGuardIrqSafe}};
+use crate::{
+    arch::x86_64::io::{InlinePort, Poll, Port, ReadWrite, Timeout, Write},
+    library::lock::spin::{Spinlock, SpinlockGuardIrqSafe},
+};
 
 /// The internal frequency of the PIT, in Hz. This is the frequency of the
 /// internal oscillator that drives the PIT, and is used to calculate the
@@ -66,10 +69,13 @@ static CHANNEL0: Port<u8, ReadWrite> = Port::new(0x40);
 static CHANNEL1: Port<u8, ReadWrite> = Port::new(0x41);
 static CHANNEL2: Port<u8, ReadWrite> = Port::new(0x42);
 
-/// Configure the channel 2 of the PIT to generate a one-shot timer that will
-/// trigger after `ms` milliseconds since the function is called.
+/// Configure the channel 2 of the PIT to sleep for the specified number of
+/// milliseconds. The sleep start immediately after this function is called,
+/// and the `perform_sleep` function only waits for the sleep to complete.
+///
 /// If the PIT is already configured for a sleep operation, this function will
-/// block until the previous sleep operation is completed.
+/// block until the previous sleep operation is completed or until the sleep
+/// token returned by the previous call to this function is dropped.
 ///
 /// This function should not be called if the PC speaker is in use, as it will
 /// disable the speaker and disable the timer 2 gate, which may interfere with
@@ -84,31 +90,54 @@ pub fn prepare_sleep(ms: usize) -> SleepToken<'static> {
     let token = SleepToken(SLEEP_LOCK.lock_irq_safe());
     let counter = (ms * 1_000_000) / PIT_TICK_NS;
 
-    // Clear the speaker bit (bit 0) and the timer 2 gate bit (bit 1) in the
-    // System Control Port B to ensure that the speaker is disabled and the
-    // timer 2 is not gated by the speaker.
+    // Disable the speaker output and the channel 2 gate to prepare for the
+    // sleep operation without being affected by the speaker's functionality
+    // or by the channel 2 gate being enabled from a previous sleep operation.
     // SAFETY: This should not cause any side effects that could lead to
     // undefined behavior or memory unsafety, as it only modifies the bits
-    // related to the speaker and timer 2 gate.
+    // related to the speaker and the channel 2 gate.
     unsafe {
         SCP_B.clear_bits(0b11);
     }
 
-    write_command(Channel::Ch2, Access::LoHibyte, OperatingMode::OneShot);
+    write_command(Channel::Ch2, Access::LoHibyte, OperatingMode::None);
     write_channel(Channel::Ch2, counter as u16);
+
+    // Start PIT channel 2 countdown.
+    // SAFETY: Enabling the timer 2 gate should not cause any side effects
+    // that could lead to undefined behavior or memory unsafety. It also
+    // does not enable the speaker output since we only set bit 1 and not
+    // bit 0, avoiding any interference with the speaker's functionality.
+    unsafe {
+        SCP_B.set_bits(0b10);
+    }
+
     token
 }
 
-/// Perform a sleep after the PIT has been configured with [`prepare_sleep`].
+/// Perform a sleep after the PIT has been configured with [`prepare_sleep`]
+/// using the token returned by that function. This function will block until
+/// the sleep operation is completed.
 ///
-/// This function will block until the PIT internal counter reaches 0 on the
-/// channel 2. If no call to `prepare_sleep` has been made, the behavior of
-/// this function is undefined, and may block indefinitely or return
-/// immediately depending on the state of the PIT.
-pub fn perform_sleep(_token: SleepToken<'static>) {
-    while read_counter(Channel::Ch2) > 0 {
-        core::hint::spin_loop();
+/// This function may return immediately if the channel 2 of the PIT has
+/// already reached 0 before the function is called, which can happen if this
+/// function is called after the specified duration in [`prepare_sleep`] has
+/// already elapsed. See the documentation of [`prepare_sleep`] for more
+/// details.
+pub fn perform_sleep(token: SleepToken<'static>) {
+    // Wait for the channel 2 of the PIT to reach 0, which indicates that the
+    // sleep operation is complete.
+    // TODO: Maybe we should implement a timeout for this wait in case
+    // something goes wrong with the PIT after too many pool iterations, to
+    // avoid waiting indefinitely.
+    // SAFETY: Polling this status bit is side-effect free for our use case.
+    unsafe {
+        SCP_B.poll_until(1 << 5, Poll::Set, Timeout::Infinite);
     }
+
+    // Drop the sleep token to allow other threads to perform sleep operations
+    // and release the lock on the sleep functionality.
+    core::mem::drop(token);
 }
 
 /// Read the current value of the counter for the specified PIT channel.
@@ -118,7 +147,7 @@ pub fn perform_sleep(_token: SleepToken<'static>) {
 /// port to construct the full 16-bit counter value. Using a latch command
 /// allows to read the counter value properly without worrying about the
 /// counter changing between reading the low byte and the high byte.
-/// 
+///
 /// This function relies on reading and writing to I/O ports and should be used
 /// with caution since I/O port operations are slow on `x86_64`.
 #[must_use]
