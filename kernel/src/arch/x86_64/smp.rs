@@ -5,7 +5,7 @@ use core::{
 
 use macros::per_cpu;
 
-use crate::{arch::x86_64, config::MAX_CPUS};
+use crate::{arch::x86_64, config::MAX_CPUS, library::lock::seq::Seqlock};
 
 /// Request the bootloader to provide information about the system's CPUs, and
 /// to start them up. This will make our life way easier since we just have to
@@ -24,6 +24,9 @@ static CPU_AVAILABLE: AtomicUsize = AtomicUsize::new(1);
 /// Whether the APs have started up and are initialized.
 static AP_READY: AtomicBool = AtomicBool::new(false);
 
+/// The identifier of the bootstrap processor (BSP).
+static BSP_ID: Seqlock<u8> = Seqlock::new(0);
+
 /// The identifier of the current CPU.
 #[per_cpu]
 static CPU_ID: Cell<u8> = Cell::new(0);
@@ -41,6 +44,7 @@ pub fn setup() {
         .bsp_lapic_id()
         .try_into()
         .expect("BSP LAPIC ID is too large to fit into an u8");
+    BSP_ID.write(cpu_id);
 
     // Some assertions to ensure that the bootloader provided valid information
     // about the CPUs in the system, and that the kernel is correctly
@@ -82,8 +86,14 @@ pub fn setup() {
 
 /// Setup the auxiliary processor.
 pub fn ap_setup(cpu_id: u8) {
-    CPU_AVAILABLE.fetch_add(1, Ordering::Relaxed);
     CPU_ID.local().set(cpu_id);
+}
+
+/// Mark the current AP as ready. This function should be called by the APs
+/// after they have completed their initialization to indicate that they are
+/// ready to be used by the kernel.
+pub fn ap_set_ready() {
+    CPU_AVAILABLE.fetch_add(1, Ordering::AcqRel);
 }
 
 /// Check if the APs have started up and are initialized.
@@ -104,4 +114,10 @@ pub fn cpu_count() -> usize {
 #[must_use]
 pub fn cpu_identifier() -> u8 {
     CPU_ID.local().get()
+}
+
+/// Check if the current CPU is the bootstrap processor (BSP).
+#[must_use]
+pub fn is_bsp() -> bool {
+    cpu_identifier() == BSP_ID.read()
 }

@@ -20,3 +20,11 @@ pub fn cpu_count() -> usize {
 pub fn ap_ready() -> bool {
     crate::arch::target::smp::ap_ready()
 }
+
+/// Check if the current CPU is the bootstrap processor (BSP). The BSP is the
+/// CPU that is responsible for booting the system and initializing the other
+/// CPUs.
+#[must_use]
+pub fn is_bsp() -> bool {
+    crate::arch::target::smp::is_bsp()
+}

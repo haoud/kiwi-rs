@@ -70,7 +70,7 @@ static CHANNEL1: Port<u8, ReadWrite> = Port::new(0x41);
 static CHANNEL2: Port<u8, ReadWrite> = Port::new(0x42);
 
 /// Configure the channel 2 of the PIT to sleep for the specified number of
-/// milliseconds. The sleep start immediately after this function is called,
+/// milliseconds. The sleep starts immediately after this function is called,
 /// and the `perform_sleep` function only waits for the sleep to complete.
 ///
 /// If the PIT is already configured for a sleep operation, this function will
@@ -128,7 +128,7 @@ pub fn perform_sleep(token: SleepToken<'static>) {
     // Wait for the channel 2 of the PIT to reach 0, which indicates that the
     // sleep operation is complete.
     // TODO: Maybe we should implement a timeout for this wait in case
-    // something goes wrong with the PIT after too many pool iterations, to
+    // something goes wrong with the PIT after too many poll iterations, to
     // avoid waiting indefinitely.
     // SAFETY: Polling this status bit is side-effect free for our use case.
     unsafe {

@@ -1,3 +1,5 @@
+use crate::time::TimerFrequency;
+
 /// The maximum number of CPUs supported by the kernel. This is a compile-time
 /// constant that can be adjusted as needed. If you need to support more CPUs,
 /// simply increase this value and recompile the kernel. However, this may
@@ -19,4 +21,4 @@ pub const MAX_CPUS: usize = 64;
 ///
 /// Since Kiwi targets desktop systems, a good default value is 1000 Hz, which
 /// provides a good balance between precision and performance.
-pub const TIMER_HZ: u32 = 1000;
+pub const TIMER_HZ: TimerFrequency = TimerFrequency::new(1000);

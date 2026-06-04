@@ -1,48 +1,24 @@
 use macros::{init, per_cpu};
 
 use crate::{
-    arch::{x86_64::{
+    arch::{
         self,
-        apic::{self, local::Register},
-    }},
+        x86_64::{
+            self,
+            apic::{self, local::Register},
+        },
+    },
     config,
     library::lock::seq::Seqlock,
+    time::{self, TimerFrequency, duration::Duration},
 };
 
 /// The base IRQ vector for the Local APIC timer.
 pub const IRQ_VECTOR: u8 = 32;
 
-/// The initial count value for the Local APIC timer that allows to achieve a
-/// fixed timer frequency. This value is computed during the calibration of 
-/// the Local APIC timer, and is never modified after that.
+/// The frequency of the Local APIC timer in Hz
 #[per_cpu]
-static INITIAL_COUNT: Seqlock<u32> = Seqlock::new(0);
-
-/// Initialize the Local APIC timer interrupt for the current core. This
-/// will configure the Local APIC timer to raise an IRQ specified by the
-/// [`IRQ_VECTOR`] in one shot mode with an divide configuration of 0b0011
-/// (divide by 16).
-///
-/// # Safety
-/// The caller must ensure to only call this function once per core during
-/// the initialization of the kernel, expect for the boot CPU which should
-/// call [`calibrate`] instead. This function should also be called after
-/// calibrating the Local APIC timer frequency with [`calibrate`].
-#[init]
-pub unsafe fn setup() {
-    // Calibrate the Local APIC timer frequency
-    calibrate();
-
-    // Configure the Local APIC timer, respectively:
-    // - Set the IRQ vector to 32, periodic mode
-    // - Set the divide configuration to 0011 (divide by 16)
-    // - Set the initial count value to the value computed during the
-    //   calibration phase to achieve a fixed timer frequency defined
-    //   by the TIMER_HZ constant in the config module.
-    apic::local::write_register(Register::LVT_TIMER, u32::from(IRQ_VECTOR) | 0x20000);
-    apic::local::write_register(Register::DIVIDE_CONFIGURATION, 0b0011);
-    apic::local::write_register(Register::INITIAL_COUNT, INITIAL_COUNT.local().read());
-}
+static FREQUENCY: Seqlock<u32> = Seqlock::new(0);
 
 /// Calibrate the Local APIC timer.
 ///
@@ -69,7 +45,6 @@ pub unsafe fn calibrate() {
 
     let elapsed = u32::MAX - apic::local::read_register(Register::CURRENT_COUNT);
     let frequency = elapsed * 20;
-    let counter = frequency / config::TIMER_HZ;
     let granularity = 1_000_000_000 / frequency;
 
     log::debug!(
@@ -79,10 +54,66 @@ pub unsafe fn calibrate() {
         granularity
     );
 
-    INITIAL_COUNT.local().write(counter);
+    FREQUENCY.local().write(frequency);
+}
+
+/// Set the Local APIC timer to periodic mode with the given frequency.
+pub fn schedule_periodic_timer() {
+    // SAFETY: Configuring the Local APIC timer in periodic mode with a valid
+    // frequency should not cause any safety issues, as long as the APIC as
+    // been properly initialized.
+    unsafe {
+        let counter = frequency_to_counter(config::TIMER_HZ);
+        apic::local::write_register(Register::LVT_TIMER, u32::from(IRQ_VECTOR) | 0x20000);
+        apic::local::write_register(Register::DIVIDE_CONFIGURATION, 0b0011);
+        apic::local::write_register(Register::INITIAL_COUNT, counter);
+    }
+}
+
+/// Get the duration elapsed since the last Local APIC timer tick.
+///
+/// FIXME: If this function is called after a timer tick IRQ has been triggered
+/// but before the timer tick handler has been called, it will return the
+/// duration elapsed since the last triggered timer tick, which is not up to
+/// date with the current timer tick of the kernel.
+/// Possible solutions to this issue include:
+/// - Using the oneshot mode in order to avoid the internal counter of the Local
+///   APIC timer to restart before the timer tick handler is called. This will
+///   increase the overhead a little bit and may drift the timer frequency.
+/// - Using a separate counter to track the elapsed time since the last timer
+///   tick, for example by using the TSC if an invariant TSC is available.
+#[must_use]
+pub fn since_last_tick() -> Duration {
+    let apic_frequency = u64::from(FREQUENCY.local().read());
+    if apic_frequency == 0 {
+        return Duration::from_nanos(0);
+    }
+
+    let initial = frequency_to_counter(config::TIMER_HZ);
+    let elapsed = initial - read_current_count();
+    let elapsed = (u64::from(elapsed) * 1_000_000_000) / apic_frequency;
+    Duration::from_nanos(elapsed)
+}
+
+/// Convert a timer frequency in Hz to a initial counter value for the
+/// Local APIC timer.
+fn frequency_to_counter(frequency: TimerFrequency) -> u32 {
+    FREQUENCY.local().read() / frequency.as_hertz()
+}
+
+/// Read the current count value of the Local APIC timer.
+#[must_use]
+fn read_current_count() -> u32 {
+    // SAFETY: This function is only reading from the Local APIC timer's
+    // current count register and should be safe to call at any time after
+    // the Local APIC timer has been initialized.
+    unsafe { apic::local::read_register(Register::CURRENT_COUNT) }
 }
 
 /// Handle a Local APIC timer interrupt.
 pub fn handle_irq() {
     apic::local::signal_eoi();
+    if arch::smp::is_bsp() {
+        time::jiffies::increment_jiffies();
+    }
 }

@@ -1,6 +1,6 @@
 use macros::init;
 
-use crate::{arch, main};
+use crate::{arch, idle_forever, main};
 
 pub mod addr;
 pub mod apic;
@@ -18,6 +18,7 @@ pub mod percpu;
 pub mod pic;
 pub mod pit;
 pub mod smp;
+pub mod time;
 pub mod trap;
 pub mod tss;
 
@@ -41,7 +42,7 @@ pub unsafe extern "C" fn start() -> ! {
 
     apic::io::setup();
     apic::local::setup();
-    apic::local::timer::setup();
+    apic::local::timer::calibrate();
 
     smp::setup();
     main();
@@ -74,12 +75,12 @@ unsafe extern "C" fn ap_start(cpu: &limine::mp::Cpu) -> ! {
     trap::setup();
 
     apic::local::setup();
-    apic::local::timer::setup();
+    apic::local::timer::calibrate();
+
     log::debug!("CPU {cpu_id} has completed its setup !");
+    smp::ap_set_ready();
 
     // Enable interrupts and wait for them to arrive
     arch::irq::enable();
-    loop {
-        arch::irq::wait();
-    }
+    idle_forever();
 }

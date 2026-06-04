@@ -8,3 +8,4 @@ pub mod mem;
 pub mod page;
 pub mod percpu;
 pub mod smp;
+pub mod time;

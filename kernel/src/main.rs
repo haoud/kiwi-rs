@@ -15,6 +15,7 @@ pub mod arch;
 pub mod config;
 pub mod library;
 pub mod mm;
+pub mod time;
 
 /// The main entry point of the kernel, common to all architectures. This
 /// function is responsible for initializing the kernel subsystems and
@@ -30,7 +31,16 @@ pub unsafe fn main() -> ! {
     mm::heap::setup();
 
     log::info!("Boot completed !");
+
+    arch::time::schedule_periodic_timer();
     arch::irq::enable();
+    idle_forever();
+}
+
+/// The idle loop of the kernel, which will be executed when there is nothing
+/// else to do. This function will put the CPU to sleep until the next
+/// interrupt, indefinitely.
+pub fn idle_forever() -> ! {
     loop {
         arch::irq::wait();
     }
