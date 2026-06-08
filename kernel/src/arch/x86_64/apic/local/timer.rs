@@ -115,5 +115,6 @@ pub fn handle_irq() {
     apic::local::signal_eoi();
     if arch::smp::is_bsp() {
         time::jiffies::increment_jiffies();
+        time::timer::handle_expired_timers();
     }
 }

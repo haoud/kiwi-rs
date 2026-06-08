@@ -78,9 +78,14 @@ unsafe extern "C" fn ap_start(cpu: &limine::mp::Cpu) -> ! {
     apic::local::timer::calibrate();
 
     log::debug!("CPU {cpu_id} has completed its setup !");
-    smp::ap_set_ready();
+    smp::ap_set_available();
 
     // Enable interrupts and wait for them to arrive
     arch::irq::enable();
+    while !smp::ap_ready() {
+        core::hint::spin_loop();
+    }
+
+    arch::time::schedule_periodic_timer();
     idle_forever();
 }

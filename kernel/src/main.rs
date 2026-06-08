@@ -11,6 +11,8 @@ extern crate alloc;
 
 use macros::init;
 
+use crate::time::{duration::Duration, instant::Instant, timer::TimerMode};
+
 pub mod arch;
 pub mod config;
 pub mod library;
@@ -30,10 +32,13 @@ pub unsafe fn main() -> ! {
     mm::buddy::setup();
     mm::heap::setup();
 
+    time::timer::setup();
+
     log::info!("Boot completed !");
 
     arch::time::schedule_periodic_timer();
     arch::irq::enable();
+    arch::smp::ap_run();
     idle_forever();
 }
 
@@ -41,6 +46,26 @@ pub unsafe fn main() -> ! {
 /// else to do. This function will put the CPU to sleep until the next
 /// interrupt, indefinitely.
 pub fn idle_forever() -> ! {
+    let cpuid = arch::smp::cpu_identifier();
+
+    time::timer::schedule(
+        TimerMode::Periodic(Duration::from_secs(2)),
+        Instant::now() + Duration::from_secs(1),
+        move |_| {
+            log::info!("Tic (CPU {})", cpuid);
+        },
+    )
+    .ignore();
+
+    time::timer::schedule(
+        TimerMode::Periodic(Duration::from_secs(2)),
+        Instant::now() + Duration::from_secs(2),
+        move |_| {
+            log::info!("Tac (CPU {})", cpuid);
+        },
+    )
+    .ignore();
+
     loop {
         arch::irq::wait();
     }

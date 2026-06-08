@@ -80,7 +80,6 @@ pub fn setup() {
         core::hint::spin_loop();
     }
 
-    AP_READY.store(true, Ordering::Release);
     CPU_ID.local().set(cpu_id);
 }
 
@@ -89,10 +88,15 @@ pub fn ap_setup(cpu_id: u8) {
     CPU_ID.local().set(cpu_id);
 }
 
-/// Mark the current AP as ready. This function should be called by the APs
-/// after they have completed their initialization to indicate that they are
-/// ready to be used by the kernel.
-pub fn ap_set_ready() {
+/// Allow the APs to start running and handling interrupts.
+pub fn ap_run() {
+    AP_READY.store(true, Ordering::Release);
+}
+
+/// Mark the current AP as available. This function should be called by the APs
+/// after they have completed their initialization to indicate that they have
+/// correctly started up and are available for use by the kernel.
+pub fn ap_set_available() {
     CPU_AVAILABLE.fetch_add(1, Ordering::AcqRel);
 }
 

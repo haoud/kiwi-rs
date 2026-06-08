@@ -3,6 +3,7 @@ use crate::time::duration::Duration;
 pub mod duration;
 pub mod instant;
 pub mod jiffies;
+pub mod timer;
 
 /// A timer frequency, in Hz.
 ///

@@ -21,6 +21,14 @@ pub fn ap_ready() -> bool {
     crate::arch::target::smp::ap_ready()
 }
 
+/// Allows the application processors (APs) to start running and handling tasks
+/// after they have been initialized and are ready to be used.
+/// This function should be called by the bootstrap processor (BSP) after it has
+/// completed the kernel initialization and should only be called once.
+pub fn ap_run() {
+    crate::arch::target::smp::ap_run();
+}
+
 /// Check if the current CPU is the bootstrap processor (BSP). The BSP is the
 /// CPU that is responsible for booting the system and initializing the other
 /// CPUs.
