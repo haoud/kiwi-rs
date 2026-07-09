@@ -22,3 +22,10 @@ pub const MAX_CPUS: usize = 64;
 /// Since Kiwi targets desktop systems, a good default value is 1000 Hz, which
 /// provides a good balance between precision and performance.
 pub const TIMER_HZ: TimerFrequency = TimerFrequency::new(1000);
+
+/// The maximum number of threads that can be created simultaneously. This is a
+/// compile-time constant that can be adjusted as needed. The default value of
+/// 32,768 is a reasonable limit for most desktop systems, but increasing this
+/// value may be necessary for systems that require a large number of threads
+/// at the cost of increasing slightly the memory usage of the kernel.
+pub const MAX_THREADS: usize = 32_768;

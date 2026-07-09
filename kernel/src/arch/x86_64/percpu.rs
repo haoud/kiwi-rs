@@ -8,7 +8,9 @@ pub struct PerCpuArchData {
     /// The base address of the per-CPU data.
     pub percpu_base: usize,
 
-    /// The kernel stack pointer to use when handling a syscall.
+    /// The kernel stack pointer for the per-cpu event loop. If zero, this
+    /// means that we already inside a trap handler and we should not switch
+    /// to the kernel stack again.
     pub kstack: usize,
 
     /// The saved user stack pointer to restore when returning from a syscall.
@@ -42,6 +44,50 @@ pub unsafe fn setup(percpu: *mut u8) {
     unsafe {
         core::ptr::write(percpu.cast::<PerCpuArchData>(), arch_percpu);
     }
+}
+
+/// Sets the kernel stack pointer for the current CPU by writing the provided
+/// `kstack` value to the GS segment register at offset 0x08.
+///
+/// Remember that the kernel stack pointer must be aligned at least to 16
+/// bytes, and that the kernel stack grows downwards, so the `kstack` pointer
+/// should point to the top of the allocated memory area for the kernel stack
+///
+/// # Safety
+/// The caller must ensure that the `kstack` pointer points to a valid kernel
+/// stack, accessible in both read and write mode, is properly aligned and is
+/// large enough to hold the kernel stack. Additionally, the caller must ensure
+/// that the stack pointer stays valid until another kernel stack is set, and
+/// that this function is called after the per-CPU data area has been
+/// initialized with [`setup`].
+pub unsafe fn set_kstack(kstack: usize) {
+    core::arch::asm!(
+        "mov gs:0x08, {}",
+        in(reg) kstack,
+        options(nostack, preserves_flags)
+    );
+}
+
+/// Sets the user stack pointer for the current CPU by writing the provided
+/// `ustack` value to the GS segment register at offset 0x10.
+///
+/// Remember that the user stack pointer must be aligned at least to 16
+/// bytes, and that the user stack grows downwards, so the `ustack` pointer
+/// should point to the top of the allocated memory area for the user stack.
+///
+/// # Safety
+/// The caller must ensure that the `ustack` pointer points to a valid user
+/// stack, accessible in both read and write mode, is properly aligned and is
+/// large enough to hold the user stack. Additionally, the caller must ensure
+/// that the stack pointer stay valid until another user stack is set, and
+/// that this function is called after the per-CPU data area has been
+/// initialized with [`setup`].
+pub unsafe fn set_ustack(ustack: usize) {
+    core::arch::asm!(
+        "mov gs:0x10, {}",
+        in(reg) ustack,
+        options(nostack, preserves_flags)
+    );
 }
 
 /// See [`crate::arch::percpu::from_offset`] for documentation.

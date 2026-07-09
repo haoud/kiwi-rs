@@ -1,6 +1,6 @@
 use core::{mem::MaybeUninit, ops::Deref};
 
-use crate::arch;
+use crate::arch::{self, irq::IrqGuard};
 
 unsafe extern "C" {
     static __percpu_start: [u64; 0];
@@ -120,14 +120,23 @@ impl<T> PerCpu<T> {
 }
 
 pub struct PerCpuGuard<'a, T> {
+    /// A guard that disables preemption and interrupts while the per-CPU
+    /// variable is accessed, and restores the previous state when the guard
+    /// is dropped.
+    _irq_guard: IrqGuard,
+
+    /// A reference to the per-CPU variable for the current CPU.
     inner: &'a T,
 }
 
 impl<'a, T> PerCpuGuard<'a, T> {
     #[must_use]
-    const fn new(inner: &'a T) -> Self {
-        // TODO: Disable preemption & interrupts
-        Self { inner }
+    fn new(inner: &'a T) -> Self {
+        // TODO: Disable preemption
+        Self {
+            inner,
+            _irq_guard: IrqGuard::new(),
+        }
     }
 }
 
@@ -141,7 +150,7 @@ impl<T> Deref for PerCpuGuard<'_, T> {
 
 impl<T> Drop for PerCpuGuard<'_, T> {
     fn drop(&mut self) {
-        // TODO: Reenable preemption and restore interrupts
+        // TODO: Reenable preemption
     }
 }
 

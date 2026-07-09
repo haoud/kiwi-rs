@@ -1,6 +1,6 @@
 use macros::init;
 
-use crate::{arch, idle_forever, main};
+use crate::{arch, main, scheduler};
 
 pub mod addr;
 pub mod apic;
@@ -18,6 +18,7 @@ pub mod percpu;
 pub mod pic;
 pub mod pit;
 pub mod smp;
+pub mod thread;
 pub mod time;
 pub mod trap;
 pub mod tss;
@@ -87,5 +88,5 @@ unsafe extern "C" fn ap_start(cpu: &limine::mp::Cpu) -> ! {
     }
 
     arch::time::schedule_periodic_timer();
-    idle_forever();
+    scheduler::run();
 }

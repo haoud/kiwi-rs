@@ -20,9 +20,10 @@ interrupt_handlers:
 .set i, i + 1
 .endr
 
+.global interrupt_enter
 .align 16
 interrupt_enter:
-     # Swap the kernel and user GS if we were in user mode
+    # Swap the kernel and user GS if we were in user mode
     cmp QWORD ptr [rsp + 8 * 3], 0x08
     je 1f
     swapgs
@@ -57,6 +58,22 @@ interrupt_enter:
     # Dealign the stack
     add rsp, 8
 
+    # TODO: Depending if the interrupt occurred inside the "event loop" of the
+    # kernel or not (e.g. if the interrupt occurred while the kernel was
+    # executing a user/kernel thread), resume the execution of the kernel 
+    # "event loop"
+    mov rax, gs:0x08
+    cmp rax, 0
+    jne thread_trap
+    jmp trap_resume
+
+
+# Resume execution of the code that was interrupted by the trap. This is called
+# from the trap handler after it has finished processing the trap, or to resume
+# the execution of a thread that was interrupted by a trap.
+.global trap_resume
+.align 16
+trap_resume:
     # Restore preserved registers
     pop rbp
     pop rbx

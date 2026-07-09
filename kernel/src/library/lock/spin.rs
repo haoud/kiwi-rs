@@ -209,6 +209,21 @@ pub struct SpinlockGuard<'a, T: ?Sized> {
     data: &'a mut T,
 }
 
+impl<T: Sized> SpinlockGuard<'_, T> {
+    /// Sets the value of the inner data to the given value.
+    pub fn set(&mut self, value: T) {
+        *self.data = value;
+    }
+}
+
+impl<T: Sized + Copy> SpinlockGuard<'_, T> {
+    /// Gets a copy of the inner data without consuming the guard.
+    #[must_use]
+    pub fn copy(&self) -> T {
+        *self.data
+    }
+}
+
 impl<T: ?Sized> Deref for SpinlockGuard<'_, T> {
     type Target = T;
 
@@ -237,6 +252,21 @@ pub struct SpinlockGuardIrqSafe<'a, T: ?Sized> {
 
     #[allow(unused)]
     irq_guard: arch::irq::IrqGuard,
+}
+
+impl<T: Sized> SpinlockGuardIrqSafe<'_, T> {
+    /// Sets the value of the inner data to the given value.
+    pub fn set(&mut self, value: T) {
+        *self.data = value;
+    }
+}
+
+impl<T: Sized + Copy> SpinlockGuardIrqSafe<'_, T> {
+    /// Gets a copy of the inner data without consuming the guard.
+    #[must_use]
+    pub fn copy(&self) -> T {
+        *self.data
+    }
 }
 
 impl<T: ?Sized> Deref for SpinlockGuardIrqSafe<'_, T> {
