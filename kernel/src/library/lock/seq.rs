@@ -63,8 +63,10 @@ impl<T: Copy> Seqlock<T> {
     pub fn write(&self, data: T) {
         // Acquire a lock to ensure that we have an exclusive write
         // access to the data to avoid multiple writes to the data
-        // at the same time.
-        let _lock = self.spin.lock();
+        // at the same time. We also disable IRQs to ensure that
+        // this function can be called from an interrupt context without
+        // causing a deadlock.
+        let _lock = self.spin.lock_irq_safe();
 
         // Increment the sequence number to indicate that the data
         // is being written. The sequence number will become odd,

@@ -37,6 +37,12 @@ impl Selector {
     }
 }
 
+impl From<Selector> for u16 {
+    fn from(selector: Selector) -> Self {
+        selector.value()
+    }
+}
+
 /// A GDT register. It is used to load the GDT in the current CPU core using
 /// the `lgdt` instruction. It is a simple wrapper around a 16-bits limit and
 /// a 64-bits base address that represents the GDT in memory.

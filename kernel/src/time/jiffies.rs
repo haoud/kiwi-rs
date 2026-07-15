@@ -1,6 +1,6 @@
 use core::ops::{Add, AddAssign, Sub, SubAssign};
 
-use crate::{config, library::lock::spin::Spinlock, time::duration::Duration};
+use crate::{config, library::lock::seq::Seqlock, time::duration::Duration};
 
 /// A number of a timer ticks. Ticks are the basic unit of time measurement in
 /// the kernel, and their duration is fixed by the timer frequency configured
@@ -13,17 +13,9 @@ impl Tick {
     /// frequency configured in `config::TIMER_HZ`.
     pub const DURATION: Duration = config::TIMER_HZ.as_duration();
 
-    /// Returns a `Tick` with a value of zero, representing the starting
-    /// point for measuring time in ticks.
-    #[must_use]
-    pub const fn zero() -> Self {
-        Self(0)
-    }
-
-    /// Increment this `Tick` by one tick.
-    pub const fn increment(&mut self) {
-        self.0 += 1;
-    }
+    /// A `Tick` with a value of zero, representing the starting point for
+    /// measuring time in ticks.
+    pub const ZERO: Self = Self(0);
 
     /// Get the tick value as a `u64`.
     #[must_use]
@@ -89,18 +81,18 @@ impl SubAssign<u64> for Tick {
 /// time elapsed since the system booted or since a specific event. This is a
 /// global variable protected by a spinlock to ensure safe concurrent access,
 /// and only the BSP should increment it at each timer tick.
-static JIFFIES: Spinlock<Tick> = Spinlock::new(Tick::zero());
+static JIFFIES: Seqlock<Tick> = Seqlock::new(Tick::ZERO);
 
 /// Increment the number of jiffies by one tick. This should be called by the
 /// timer interrupt handler at each timer tick to keep track of the time
 /// elapsed since the system booted. Only once core should call this function
 /// per timer tick.
 pub fn increment_jiffies() {
-    JIFFIES.lock_irq_safe().increment();
+    JIFFIES.write(JIFFIES.read() + 1);
 }
 
 /// Returns the number of jiffies since the system booted.
 #[must_use]
 pub fn jiffies() -> Tick {
-    *JIFFIES.lock_irq_safe()
+    JIFFIES.read()
 }

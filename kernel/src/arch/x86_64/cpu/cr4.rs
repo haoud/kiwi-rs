@@ -3,6 +3,7 @@ use bitflags::bitflags;
 bitflags! {
     /// The features that can be enabled in the `CR4` register.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    #[repr(transparent)]
     pub struct Features: u64 {
         /// Enables virtual-8086 mode support with hardware-supported
         /// performance enhancements.

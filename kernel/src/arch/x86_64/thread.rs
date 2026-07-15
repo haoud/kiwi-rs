@@ -7,7 +7,10 @@ use core::{
 use alloc::boxed::Box;
 
 use crate::{
-    arch::x86_64::{cpu, gdt},
+    arch::x86_64::{
+        cpu::{self, rflags},
+        gdt,
+    },
     scheduler::{self, TaskState},
 };
 
@@ -50,12 +53,12 @@ impl LocalContext {
     fn new(function: usize, param: usize) -> Self {
         let mut kstack = KernelStack::new();
         let cpu = cpu::InterruptFrame {
-            cs: u64::from(gdt::Selector::KERNEL_CODE.value()),
-            ss: u64::from(gdt::Selector::KERNEL_DATA.value()),
-            rip: function as u64,
-            rdi: param as u64,
-            rsp: kstack.top().addr() as u64,
-            rflags: 0x202,
+            rflags: rflags::Flags::IF | rflags::Flags::RESERVED,
+            rip: cpu::Register::from(function),
+            rdi: cpu::Register::from(param),
+            rsp: cpu::Register::from(kstack.top().addr()),
+            cs: cpu::Register::from(u16::from(gdt::Selector::KERNEL_CODE)),
+            ss: cpu::Register::from(u16::from(gdt::Selector::KERNEL_DATA)),
             ..Default::default()
         };
 

@@ -1,10 +1,3 @@
-/// The state of IRQs, either enabled or disabled.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum State {
-    Enabled,
-    Disabled,
-}
-
 /// A guard that disables IRQs for the duration of its lifetime and restores
 /// the previous state of IRQs when dropped.
 ///
@@ -43,6 +36,13 @@ impl Drop for IrqGuard {
             restore(self.state);
         }
     }
+}
+
+/// The state of IRQs, either enabled or disabled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum State {
+    Enabled,
+    Disabled,
 }
 
 /// Wait for an interrupt.

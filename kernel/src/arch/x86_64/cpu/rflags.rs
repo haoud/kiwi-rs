@@ -3,12 +3,16 @@ use bitflags::bitflags;
 bitflags! {
     /// Flags in the RFLAGS register.
     #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    #[repr(transparent)]
     pub struct Flags : u64 {
         /// Carry flag. Set if an arithmetic operation generates a carry or a
         /// borrow out of the most significant bit of the result; cleared
         /// otherwise. This flag can be armed with the `stc` instruction and
         /// disarmed with the `clc` instruction.
         const CF = 1 << 0;
+
+        /// Reserved flag. This flag is reserved and should always be set to 1.
+        const RESERVED = 1 << 1;
 
         /// Parity flag. Set if the least-significant byte of the result
         /// contains an even number of 1 bits; cleared otherwise.
