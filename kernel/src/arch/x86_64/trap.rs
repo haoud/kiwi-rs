@@ -89,7 +89,7 @@ impl Register {
     /// entire lifetime of the kernel or until another IDT is loaded in the
     /// CPU.
     pub unsafe fn load(&self) {
-        x86_64::instr::lidt(core::ptr::from_ref::<Self>(self) as usize);
+        x86_64::opcode::lidt(core::ptr::from_ref::<Self>(self) as usize);
     }
 }
 

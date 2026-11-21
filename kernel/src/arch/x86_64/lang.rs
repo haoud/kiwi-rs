@@ -7,11 +7,7 @@ fn panic(info: &core::panic::PanicInfo) -> ! {
     // per-CPU variables are not yet initialized. However, we can assume that
     // the current CPU is the bootstrap processor (BSP), which often has an
     // identifier of 0.
-    let cpu_id = if arch::smp::ap_ready() {
-        arch::smp::cpu_identifier()
-    } else {
-        0
-    };
+    let cpu_id = arch::smp::cpu_identifier();
 
     let message = info.message();
     if let Some(location) = info.location() {

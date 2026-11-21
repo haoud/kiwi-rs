@@ -5,7 +5,7 @@ use crate::arch::x86_64::{self, cpu::rflags};
 /// If interrupts are disabled, this function will halt indefinitely until a
 /// non-maskable interrupt (NMI) is received.
 pub fn wait() {
-    x86_64::instr::hlt();
+    x86_64::opcode::hlt();
 }
 
 /// Enable IRQs.
@@ -14,7 +14,7 @@ pub fn wait() {
 /// This function is unsafe because enabling interrupts can lead to memory
 /// unsafety if the interrupts are not properly handled.
 pub unsafe fn enable() {
-    x86_64::instr::sti();
+    x86_64::opcode::sti();
 }
 
 /// Disable IRQs.
@@ -23,7 +23,7 @@ pub fn disable() {
     // (on the contrary, it usually helps to avoid them!) or any unexpected
     // side effects.
     unsafe {
-        x86_64::instr::cli();
+        x86_64::opcode::cli();
     }
 }
 

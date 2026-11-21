@@ -74,7 +74,7 @@ impl Register {
     /// The caller must ensure that the GDT provided is valid and will remain
     /// valid for the entire lifetime of the kernel.
     pub unsafe fn load(&self) {
-        x86_64::instr::lgdt(core::ptr::from_ref::<Self>(self) as usize);
+        x86_64::opcode::lgdt(core::ptr::from_ref::<Self>(self) as usize);
     }
 }
 
@@ -108,19 +108,12 @@ pub struct Entry(u64);
 /// GDT for all CPU cores while still having a different TSS for each CPU core.
 #[per_cpu]
 static TABLE: Spinlock<[Entry; 8]> = Spinlock::new([
-    // Null entry
     Entry(0),
-    // 64-bit kernel code segment
     Entry(0x00af_9b00_0000_ffff),
-    // 64-bit kernel data segment
     Entry(0x00af_9300_0000_ffff),
-    // 64-bit user data segment
     Entry(0x00af_f300_0000_ffff),
-    // 64-bit user code segment
     Entry(0x00af_fb00_0000_ffff),
-    // Unused
     Entry(0),
-    // TSS entry
     Entry(0),
     Entry(0),
 ]);
@@ -157,17 +150,16 @@ pub(super) unsafe fn load_tss(tss: *const TaskStateSegment) {
     let address = tss.addr() as u64;
     let mut low = 0;
 
-    // Set the limit to the size of the TSS minus 1 (inclusive limit)
+    // Set the appropriate bits in order to create a valid TSS entry:
+    // - Bits 15:0: Limit (size of the TSS minus one)
+    // - Bits 31:16: Base address (lower 16 bits of the TSS address)
+    // - Bits 39:32: Base address (next 8 bits of the TSS address)
+    // - Bits 43:40: Type (0b1001 for 64-bits TSS)
+    // - Bit 47: Present (1)
     low.set_bit_range(15, 0, (core::mem::size_of::<TaskStateSegment>() - 1) as u64);
-
-    // Set the low 32 bits of the base address
     low.set_bit_range(63, 56, (address >> 24) & 0xFF);
     low.set_bit_range(39, 16, address & 0xFF_FFFF);
-
-    // Set the type to 0b1001 (x86_64 available TSS)
     low.set_bit_range(43, 40, 0b1001);
-
-    // Set the present bit to 1
     low.set_bit(47, true);
 
     // Update the TSS entry in the GDT

@@ -293,8 +293,7 @@ pub fn run() -> ! {
         // scheduled again in the future.
         let state = {
             let mut state = next.state.lock();
-            state.suspend();
-            state.copy()
+            state.suspend()
         };
 
         if state.is_runnable() {
@@ -311,7 +310,7 @@ pub fn run() -> ! {
 /// expired.
 fn run_thread(thread: &Arc<Task>) {
     CURRENT_TASK.local().lock().replace(Arc::clone(thread));
-    let _guard = timer::schedule_in(Task::QUANTUM, move |_| {
+    let guard = timer::schedule_in(Task::QUANTUM, move |_| {
         set_need_reschedule(true);
     });
 
@@ -319,6 +318,11 @@ fn run_thread(thread: &Arc<Task>) {
         arch::thread::execute(&mut thread.thread.lock());
         // TODO: Kernel work
     }
+
+    // Drop the guard to cancel the timer if it hasn't fired yet. This is
+    // important to avoid spuriously modifying the NEED_RESCHEDULE flag
+    // after the thread has been preempted and is no longer running.
+    core::mem::drop(guard);
 
     CURRENT_TASK.local().lock().take();
     set_need_reschedule(false);

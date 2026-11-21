@@ -4,6 +4,7 @@ use core::arch::x86_64::CpuidResult;
 pub type Result = CpuidResult;
 
 bitflags! {
+    /// The features supported by the CPU.
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub struct Features : u64 {
         /// Floating-point unit on-chip

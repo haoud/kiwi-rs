@@ -48,7 +48,7 @@ pub unsafe fn setup() -> arch::mem::MemoryMap {
     // Trust the bootloader to provide a valid memory map. If the bootloader is
     // malicious or buggy, this could lead to undefined behavior, but we have
     // no choice at this point in the boot process.
-    let mut memmap = arch::generic::mem::MemoryMap::empty();
+    let mut memmap = arch::mem::MemoryMap::empty();
     for entry in response.entries() {
         let start_addr = entry.base.into_usize();
         let end_addr = start_addr

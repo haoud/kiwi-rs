@@ -8,7 +8,7 @@ pub fn write(message: &str) {
     // SAFETY: Use the serial port to write the message should be safe
     // even if the serial port was not initialized.
     message.as_bytes().iter().for_each(|&byte| unsafe {
-        x86_64::instr::outb(0x3F8, byte);
-        x86_64::instr::outb(0x80, 0);
+        x86_64::opcode::outb(0x3F8, byte);
+        x86_64::opcode::outb(0x80, 0);
     });
 }

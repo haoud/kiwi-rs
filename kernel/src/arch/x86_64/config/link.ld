@@ -6,7 +6,6 @@ KERNEL_VIRT_BASE = 0xFFFFFFFF80000000;
 SECTIONS
 {
     . = KERNEL_VIRT_BASE;
-
     .init : ALIGN(4K)
     {
         // Per-CPU data for each CPU. Similar to per-cpu constructor, we can put

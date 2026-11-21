@@ -12,14 +12,21 @@ const HHDM_BASE: Virtual<Kernel> = Virtual::<Kernel>::new(0xFFFF_8000_0000_0000)
 /// would need to map it explicitly using page tables.
 const HHDM_MAX_ADDRESS: Virtual<Kernel> = Virtual::<Kernel>::new(0xFFFF_9000_0000_0000);
 
+/// The size of the Higher Half Direct Map (HHDM), in bytes.
+const HHDM_SIZE: usize = HHDM_MAX_ADDRESS.as_usize() - HHDM_BASE.as_usize();
+
 /// Translates a physical address to its corresponding virtual address in the
 /// Higher Half Direct Map (HHDM). If the physical address is not mapped in the
 /// HHDM or if the translation would overflow, this function returns `None`.
 #[must_use]
 pub fn translate(physical: Physical<AllMemory>) -> Option<Virtual<Kernel>> {
-    Some(Virtual::<Kernel>::new(
-        HHDM_BASE.as_usize().checked_add(physical.as_usize())?,
-    ))
+    if usize::from(physical) < HHDM_SIZE {
+        Some(Virtual::<Kernel>::new(
+            usize::from(HHDM_BASE) + usize::from(physical),
+        ))
+    } else {
+        None
+    }
 }
 
 /// Translates a virtual address in the Higher Half Direct Map (HHDM) back to

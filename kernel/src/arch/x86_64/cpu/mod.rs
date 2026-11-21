@@ -111,8 +111,8 @@ pub fn freeze() -> ! {
         // SAFETY: This is safe because this halt the CPU until the next
         // reboot.. And safety is not a concern at this point ;)
         unsafe {
-            x86_64::instr::cli();
-            x86_64::instr::hlt();
+            x86_64::opcode::cli();
+            x86_64::opcode::hlt();
         }
     }
 }

@@ -69,11 +69,11 @@ impl IO for u8 {
     const ZERO: Self = 0;
 
     unsafe fn write(port: u16, value: u8) {
-        x86_64::instr::outb(port, value);
+        x86_64::opcode::outb(port, value);
     }
 
     unsafe fn read(port: u16) -> u8 {
-        x86_64::instr::inb(port)
+        x86_64::opcode::inb(port)
     }
 }
 
@@ -81,11 +81,11 @@ impl IO for u16 {
     const ZERO: Self = 0;
 
     unsafe fn write(port: u16, value: u16) {
-        x86_64::instr::outw(port, value);
+        x86_64::opcode::outw(port, value);
     }
 
     unsafe fn read(port: u16) -> u16 {
-        x86_64::instr::inw(port)
+        x86_64::opcode::inw(port)
     }
 }
 
@@ -93,11 +93,11 @@ impl IO for u32 {
     const ZERO: Self = 0;
 
     unsafe fn write(port: u16, value: u32) {
-        x86_64::instr::outd(port, value);
+        x86_64::opcode::outd(port, value);
     }
 
     unsafe fn read(port: u16) -> u32 {
-        x86_64::instr::ind(port)
+        x86_64::opcode::ind(port)
     }
 }
 
@@ -534,5 +534,5 @@ impl<T: IO, A: ReadAccess + WriteAccess> Port<T, A> {
 /// 0x80 is not used by the hardware. This is why this function is marked as
 /// unsafe, though it should be safe in practice.
 pub unsafe fn pause() {
-    x86_64::instr::outb(0x80, 0);
+    x86_64::opcode::outb(0x80, 0);
 }

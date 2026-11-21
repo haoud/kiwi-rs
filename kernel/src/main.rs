@@ -42,5 +42,16 @@ pub unsafe fn main() -> ! {
 
     scheduler::spawn(|| log::info!("Hello from thread A"));
     scheduler::spawn(|| log::info!("Hello from thread B"));
+    scheduler::spawn_fn(kernel_thread);
     scheduler::run();
+}
+
+/// The event loop of the kernel. Most of the kernel's work is done in this
+/// loop, which waits for events and dispatches them using a kernel executor,
+/// allowing writing asynchronous code in the kernel using the `async`/`await`
+/// syntax.
+pub fn kernel_thread() -> ! {
+    loop {
+        // Give the processor...
+    }
 }

@@ -46,7 +46,7 @@ static TSS: Spinlock<TaskStateSegment> = Spinlock::new(TaskStateSegment::default
 #[init]
 pub unsafe fn setup() {
     x86_64::gdt::load_tss(core::ptr::from_ref(&*TSS.local().lock()));
-    x86_64::instr::ltr(x86_64::gdt::Selector::TSS.value());
+    x86_64::opcode::ltr(x86_64::gdt::Selector::TSS.value());
 }
 
 /// Set the kernel stack for the current CPU core. This will be used by the

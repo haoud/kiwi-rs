@@ -117,7 +117,11 @@ pub fn cpu_count() -> usize {
 /// that can be used to differentiate them.
 #[must_use]
 pub fn cpu_identifier() -> u8 {
-    CPU_ID.local().get()
+    if AP_READY.load(Ordering::Acquire) {
+        CPU_ID.local().get()
+    } else {
+        0
+    }
 }
 
 /// Check if the current CPU is the bootstrap processor (BSP).

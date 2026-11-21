@@ -1,6 +1,9 @@
 /// Get the identifier of the current CPU. The number is unique for each CPU,
 /// but not necessarily sequential. The first CPU is not guaranteed to have
 /// an identifier of 0.
+///
+/// If this function is called before the SMP subsystem is initialized, it will
+/// always return 0, assuming this is the bootstrap processor (BSP).
 #[must_use]
 pub fn cpu_identifier() -> u8 {
     crate::arch::target::smp::cpu_identifier()
