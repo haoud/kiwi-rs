@@ -52,6 +52,6 @@ pub unsafe fn main() -> ! {
 /// syntax.
 pub fn kernel_thread() -> ! {
     loop {
-        // Give the processor...
+        scheduler::schedule();
     }
 }

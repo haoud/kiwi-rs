@@ -1,205 +1,37 @@
-use core::{
-    cell::Cell,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use core::cell::Cell;
 
-use alloc::{boxed::Box, collections::vec_deque::VecDeque, sync::Arc, vec::Vec};
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use macros::{init, per_cpu};
 
 use crate::{
-    arch::{self, thread::KernelThreadStart},
+    arch::{self, irq::State, thread::KernelThreadStart},
     library::lock::spin::Spinlock,
-    time::{duration::Duration, timer},
+    scheduler::task::{Task, TaskState, ThreadFn},
 };
 
-/// A type alias for a function that represents the entry point of a kernel
-/// thread. The function takes no arguments and does not return, as it is
-/// expected to either run indefinitely or terminate the thread by calling
-/// [`arch::thread::exit()`].
-pub type ThreadFn = fn() -> !;
+pub mod policy;
+pub mod task;
 
-/// Represents a task in the system, which is a unit of execution that can be
-/// scheduled by the kernel. Each task is associated with a thread, which can
-/// either be a kernel thread or a user thread.
-#[derive(Debug)]
-pub struct Task {
-    /// The thread associated with this task. This is a low-level
-    /// representation of the execution context of the task, designed
-    /// to be architecture-specific.
-    thread: Spinlock<arch::thread::Thread>,
-
-    /// The current state of the task
-    state: Spinlock<TaskState>,
-
-    /// A unique identifier for the task, used for tracking and managing
-    /// tasks within the scheduler.
-    id: ThreadIdentifier,
-}
-
-impl Task {
-    /// The time slice allocated to each task that a task is allowed to run
-    /// continuously before the scheduler preempts it and switches to another
-    /// task. Since we use a very simple round-robin scheduling algorithm, this
-    /// value is fixed, but is unfair to tasks that do a lot of I/O since they
-    /// will be put back into the end of the runnable queue and will have to
-    /// wait for their next turn to run.
-    pub const QUANTUM: Duration = Duration::from_millis(50);
-
-    /// Creates a new task with the given thread.
-    #[must_use]
-    pub fn new(thread: arch::thread::Thread) -> Self {
-        Self {
-            thread: Spinlock::new(thread),
-            state: Spinlock::new(TaskState::Created),
-            id: ThreadIdentifier::generate(),
-        }
-    }
-
-    #[must_use]
-    pub fn id(&self) -> &ThreadIdentifier {
-        &self.id
-    }
-}
-
-impl Drop for Task {
-    fn drop(&mut self) {
-        log::info!("Dropping task {:?}", self.id.0);
-    }
-}
-
-/// Represents the various states that a task can be in during its lifecycle.
-/// This enum ensures that tasks transition through valid states and provides
-/// a clear understanding of the task's current status within the scheduler.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum TaskState {
-    /// The thread has been created but has not yet started running.
-    Created,
-
-    /// The thread is currently running on a CPU.
-    Running,
-
-    /// The thread is ready to run and is waiting to be scheduled on a CPU.
-    Runnable,
-
-    /// The thread is waiting for an event to occur before it can continue
-    /// running. This could be waiting for I/O, a lock, or some other condition
-    /// to be met.
-    Blocked,
-
-    /// The thread has finished executing and is no longer active.
-    Exited,
-
-    /// The thread has been terminated by the kernel due to a fatal error or
-    /// other exceptional condition. This state is similar to [`Self::Exited`],
-    /// but indicates that the thread did not complete its work successfully.
-    Killed,
-
-    /// The termination of the thread has been acknowledged by the kernel, and
-    /// its resources are waiting to be cleaned up.
-    Zombie,
-}
-
-impl TaskState {
-    /// Updates the state of the task to indicate that it is no longer running
-    /// and is now suspended and return a copy of the new state.
-    #[allow(clippy::return_self_not_must_use)]
-    pub fn suspend(&mut self) -> Self {
-        match self {
-            TaskState::Running => {
-                // If the task is currently running and is now being
-                // suspended from running: This is the expected behavior,
-                // but we need to change the state to `Runnable` to indicate
-                // that the task is no longer running and is now ready to be
-                // scheduled again.
-                *self = Self::Runnable;
-            }
-            TaskState::Runnable => {
-                // Somehow, the task is being suspended while it is in the
-                // runnable state. This is quite unexpected, and we print
-                // a warning to indicate that something unusual is happening.
-                log::warn!(
-                    "Suspending a task that is in the runnable state (should be running): {:?}",
-                    self
-                );
-            }
-            TaskState::Blocked | TaskState::Exited | TaskState::Killed => {
-                // If the task is currently blocked and is now being
-                // suspended from running: This is the expected behavior,
-                // and we don't need to do anything special here.
-                //
-                // If the task has exited or been killed and is now being
-                // suspended from running: this is the expected behavior,
-                // and we don't need to do anything special here. The task
-                // is already in a terminal state, and suspending it doesn't
-                // change that.
-            }
-            _ => unreachable!("Invalid state transition (suspended): {:?}", self),
-        }
-        *self
-    }
-
-    /// Updates the state of the task to indicate that it is now running.
-    ///
-    /// # Panics
-    /// This function panics if the task is not in a state where it can
-    /// transition to running, which is either `Created` or `Runnable`.
-    /// If the task is in any other state, it is considered an invalid state
-    /// transition, and is a serious logic bug in the kernel and we panic
-    /// to avoid any data corruption or undefined behavior that could occur
-    /// if we allowed the task to transition to running from an invalid state.
-    pub fn running(&mut self) {
-        match self {
-            TaskState::Created | TaskState::Runnable => {
-                *self = Self::Running;
-            }
-            _ => {
-                unreachable!("Invalid state transition (from {:?} to Running)", self);
-            }
-        }
-    }
-
-    /// Returns true if the task is in a terminal state (i.e., it has exited,
-    /// been killed, or is a zombie).
-    #[must_use]
-    pub fn is_terminated(&self) -> bool {
-        matches!(self, Self::Exited | Self::Killed | Self::Zombie)
-    }
-
-    /// Returns true if the task is in a state where it can be scheduled to run.
-    #[must_use]
-    pub fn is_runnable(&self) -> bool {
-        matches!(self, Self::Runnable | Self::Running)
-    }
-}
-
-/// A unique identifier for a thread, used for tracking and managing threads
-/// within the scheduler.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ThreadIdentifier(usize);
-
-impl ThreadIdentifier {
-    /// Generates a new unique thread identifier.
-    #[must_use]
-    pub fn generate() -> Self {
-        static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
-        Self(NEXT_ID.fetch_add(1, Ordering::Relaxed))
-    }
-}
-
-impl From<ThreadIdentifier> for usize {
-    fn from(id: ThreadIdentifier) -> Self {
-        id.0
-    }
+/// A trait that defines the behavior of a scheduler policy. A scheduler policy
+/// is responsible for determining which task to run next and how to manage the
+/// state of tasks in the system. The policy is set during kernel initialization
+/// and is used by the scheduler to make scheduling decisions.
+pub trait Policy {
+    fn task_runnable(&mut self, task: Arc<Task>);
+    fn task_blocked(&mut self, task: Arc<Task>);
+    fn task_terminated(&mut self, task: Arc<Task>);
+    fn next_task(&mut self) -> Option<Arc<Task>>;
+    fn run_task(&mut self, task: &Arc<Task>);
 }
 
 /// A global list of all tasks that currently exist in the system. This list
 /// is used for tracking and managing tasks.
 static TASKS: Spinlock<Vec<Arc<Task>>> = Spinlock::new(Vec::new());
 
-/// A queue of tasks that are ready to run. Tasks are added to the back of the queue
-/// when they become runnable, and are removed from the front of the queue when they
-/// are scheduled to run.
-static RUNNABLE: Spinlock<VecDeque<Arc<Task>>> = Spinlock::new(VecDeque::new());
+/// A global scheduler policy that determines how tasks are scheduled and
+/// executed. This policy is set during kernel initialization and is used by
+/// the scheduler to determine which task to run next.
+static POLICY: Spinlock<Option<Box<dyn Policy + Send + Sync>>> = Spinlock::new(None);
 
 /// The current task that is running on this CPU.
 #[per_cpu]
@@ -216,17 +48,31 @@ static NEED_RESCHEDULE: Cell<bool> = Cell::new(false);
 /// once, before any threads are created or scheduled
 #[init]
 pub unsafe fn setup() {
-    // Nothing to do here for now
+    POLICY
+        .lock()
+        .replace(Box::new(policy::rr::RoundRobin::new()));
 }
 
 /// Spawns a new kernel thread that will execute the given function.
+///
+/// # Panics
+/// This function panics if there is no scheduler policy set, which indicates
+/// that the scheduler has not been properly initialized or configured.
 pub fn spawn_fn(function: ThreadFn) {
     let task = Arc::new(Task::new(arch::thread::Thread::kernel(function)));
     TASKS.lock().push(Arc::clone(&task));
-    RUNNABLE.lock().push_back(task);
+    POLICY
+        .lock()
+        .as_mut()
+        .expect("No scheduler policy set")
+        .task_runnable(task);
 }
 
 /// Spawns a new kernel thread that will execute the given closure.
+///
+/// # Panics
+/// This function panics if there is no scheduler policy set, which indicates
+/// that the scheduler has not been properly initialized or configured.
 pub fn spawn<F>(f: F)
 where
     F: FnOnce() + Send + 'static,
@@ -236,10 +82,16 @@ where
         Box::new(f),
     )));
     TASKS.lock().push(Arc::clone(&task));
-    RUNNABLE.lock().push_back(task);
+    POLICY
+        .lock()
+        .as_mut()
+        .expect("No scheduler policy set")
+        .task_runnable(task);
 }
 
-/// Changes the state of the current task to the given state.
+/// Changes the state of the current task to the given state. Be careful
+/// when using this function, as changing the state of the current task can
+/// lead to unexpected behavior if not done correctly...
 ///
 /// # Panics
 /// This function panics if there is no current task, which indicates that the
@@ -250,7 +102,7 @@ pub fn change_current_task_state(state: TaskState) {
         .lock_irq_safe()
         .as_mut()
         .expect("No current task to change state for")
-        .state
+        .state()
         .lock()
         .set(state);
 }
@@ -269,38 +121,49 @@ pub fn need_reschedule() -> bool {
     NEED_RESCHEDULE.local().get()
 }
 
-/// The heart of the scheduler.
+/// Schedules the next task to run.
 ///
-/// This function runs in an infinite loop, continuously checking for runnable
-/// tasks and executing them. If there are no runnable tasks, it will put the
-/// CPU into a low-power state until an interrupt occurs, at which point it
-/// will check for runnable tasks again.
-pub fn run() -> ! {
+/// This function sets the `NEED_RESCHEDULE` flag to true and then waits for an
+/// interrupt to occur, which will trigger the rescheduling of the current
+/// task.
+/// TODO: Implement an immediate rescheduling mechanism that does not require
+/// waiting for an interrupt.
+///
+/// # Panics
+/// This function panics if interrupts are not enabled, which indicates that
+/// the scheduler cannot safely perform a context switch at this time because
+/// the caller is in a critical section or has disabled interrupts for some
+/// other reason that can make a context switch unsafe.
+pub fn schedule() {
+    assert!(arch::irq::enabled() == State::Enabled);
+    set_need_reschedule(true);
+    arch::irq::wait();
+}
+
+/// Returns the next runnable task from the scheduler policy. If there are no
+/// runnable tasks, this function will block until one becomes available. The
+/// returned task will have its state changed to `Running` before being
+/// returned to the caller.
+///
+/// If supported by the architecture, this function will put the CPU into a
+/// low-power state until an interrupt occurs in order to save power and reduce
+///  heat generation.
+///
+/// # Panics
+/// This function panics if there is no scheduler policy set, which indicates
+/// that the scheduler has not been properly initialized or configured.
+pub fn get_runnable_task() -> Arc<Task> {
     loop {
-        let next = loop {
-            if let Some(thread) = RUNNABLE.lock().pop_front() {
-                thread.state.lock().running();
-                break thread;
-            }
-            arch::irq::wait();
-        };
-
-        run_thread(&next);
-
-        // Change the state of the task to indicate that it is no longer
-        // running and is now suspended. If the task is still in a runnable
-        // state, we add it back to the runnable queue so that it can be
-        // scheduled again in the future.
-        let state = {
-            let mut state = next.state.lock();
-            state.suspend()
-        };
-
-        if state.is_runnable() {
-            RUNNABLE.lock().push_back(next);
-        } else if state.is_terminated() {
-            TASKS.lock().retain(|t| !Arc::ptr_eq(t, &next));
+        if let Some(thread) = POLICY
+            .lock()
+            .as_mut()
+            .expect("No scheduler policy set")
+            .next_task()
+        {
+            thread.state().lock().running();
+            break thread;
         }
+        arch::irq::wait();
     }
 }
 
@@ -310,22 +173,63 @@ pub fn run() -> ! {
 /// expired.
 fn run_thread(thread: &Arc<Task>) {
     CURRENT_TASK.local().lock().replace(Arc::clone(thread));
-    let guard = timer::schedule_in(Task::QUANTUM, move |_| {
-        set_need_reschedule(true);
+    arch::irq::without(|| {
+        POLICY
+            .lock()
+            .as_mut()
+            .expect("No scheduler policy set")
+            .run_task(thread);
+        set_need_reschedule(false);
     });
-
-    while !need_reschedule() {
-        arch::thread::execute(&mut thread.thread.lock());
-        // TODO: Kernel work
-    }
-
-    // Drop the guard to cancel the timer if it hasn't fired yet. This is
-    // important to avoid spuriously modifying the NEED_RESCHEDULE flag
-    // after the thread has been preempted and is no longer running.
-    core::mem::drop(guard);
-
     CURRENT_TASK.local().lock().take();
-    set_need_reschedule(false);
+}
+
+/// The heart of the scheduler.
+///
+/// This function runs in an infinite loop, continuously checking for runnable
+/// tasks and executing them. If there are no runnable tasks, it will put the
+/// CPU into a low-power state until an interrupt occurs, at which point it
+/// will check for runnable tasks again.
+///
+/// # Panics
+/// This function panics if there is no scheduler policy set, which indicates
+/// that the scheduler has not been properly initialized or configured.
+pub fn run() -> ! {
+    assert!(arch::irq::enabled() == State::Enabled);
+
+    loop {
+        let next = get_runnable_task();
+        run_thread(&next);
+
+        // Change the state of the task to indicate that it is no longer
+        // running and is now suspended and inform the scheduler policy
+        // of the new state of the task.
+        let state = {
+            let mut state = next.state().lock();
+            state.suspend()
+        };
+
+        if state.is_runnable() {
+            POLICY
+                .lock()
+                .as_mut()
+                .expect("No scheduler policy set")
+                .task_runnable(next);
+        } else if state.is_blocked() {
+            POLICY
+                .lock()
+                .as_mut()
+                .expect("No scheduler policy set")
+                .task_blocked(next);
+        } else if state.is_terminated() {
+            TASKS.lock().retain(|t| !Arc::ptr_eq(t, &next));
+            POLICY
+                .lock()
+                .as_mut()
+                .expect("No scheduler policy set")
+                .task_terminated(next);
+        }
+    }
 }
 
 /// A helper function that serves as the entry point for a kernel thread to

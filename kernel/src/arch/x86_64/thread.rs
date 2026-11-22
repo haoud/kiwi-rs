@@ -11,7 +11,7 @@ use crate::{
         cpu::{self, rflags},
         gdt,
     },
-    scheduler::{self, TaskState},
+    scheduler::{self, task::TaskState},
 };
 
 core::arch::global_asm!(include_str!("asm/thread.asm"));
@@ -20,6 +20,16 @@ unsafe extern "C" {
     fn thread_resume(context: *mut cpu::InterruptFrame) -> *mut cpu::InterruptFrame;
     fn thread_exit() -> !;
 }
+
+/// A type alias for the entry point of a kernel thread. The function takes a
+/// pointer to a `KernelThreadStart` struct as an argument, which contains the
+/// closure to be executed by the kernel thread.
+pub type KernelThreadEntry = unsafe extern "C" fn(*mut KernelThreadStart) -> !;
+
+/// A type alias for the closure to be executed by a kernel thread. The closure
+/// must be `Send` and have a `'static` lifetime, as it will be executed
+/// in a separate thread context and may outlive the current thread.
+pub type KernelThreadClosure = dyn FnOnce() + Send + 'static;
 
 /// A structure that represents the context of a thread.
 #[derive(Default, Debug)]
@@ -245,16 +255,6 @@ impl KernelThreadStart {
         (self.closure)();
     }
 }
-
-/// A type alias for the entry point of a kernel thread. The function takes a
-/// pointer to a `KernelThreadStart` struct as an argument, which contains the
-/// closure to be executed by the kernel thread.
-pub type KernelThreadEntry = unsafe extern "C" fn(*mut KernelThreadStart) -> !;
-
-/// A type alias for the closure to be executed by a kernel thread. The closure
-/// must be `Send` and have a `'static` lifetime, as it will be executed
-/// in a separate thread context and may outlive the current thread.
-pub type KernelThreadClosure = dyn FnOnce() + Send + 'static;
 
 /// Executes the given thread until it is interrupted or exits. When this
 /// happens, the thread's state is saved and this function returns, allowing
