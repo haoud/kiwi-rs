@@ -13,6 +13,7 @@ use macros::init;
 
 pub mod arch;
 pub mod config;
+pub mod future;
 pub mod library;
 pub mod mm;
 pub mod scheduler;
@@ -43,6 +44,13 @@ pub unsafe fn main() -> ! {
     scheduler::spawn(|| log::info!("Hello from thread A"));
     scheduler::spawn(|| log::info!("Hello from thread B"));
     scheduler::spawn_fn(kernel_thread);
+
+    // Two tasks running concurrently on the executor of this CPU: their
+    // messages are interleaved, and both complete in about 300 ms instead
+    // of 600 ms if they were run one after the other.
+    future::spawn(ticker("tick", 100, 3));
+    future::spawn(ticker("tock", 150, 2));
+
     scheduler::run();
 }
 
@@ -53,5 +61,20 @@ pub unsafe fn main() -> ! {
 pub fn kernel_thread() -> ! {
     loop {
         scheduler::schedule();
+    }
+}
+
+/// A small example of an asynchronous kernel task: it sleeps `count` times
+/// for `period_ms` milliseconds, and prints the time elapsed since its start
+/// after each sleep.
+async fn ticker(name: &'static str, period_ms: u64, count: usize) {
+    let start = time::instant::Instant::now();
+    for i in 1..=count {
+        future::sleep(time::duration::Duration::from_millis(period_ms)).await;
+        log::info!(
+            "[{name}] {i}/{count} after {} ms (expected {} ms)",
+            start.elapsed().as_millis(),
+            i as u64 * period_ms
+        );
     }
 }

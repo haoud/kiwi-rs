@@ -22,6 +22,9 @@ pub struct Duration {
 }
 
 impl Duration {
+    /// A `Duration` that represents zero time.
+    pub const ZERO: Self = Self { nanos: 0 };
+
     /// Returns a `Duration` that represents zero time.
     #[must_use]
     pub const fn none() -> Self {

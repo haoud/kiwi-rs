@@ -117,6 +117,20 @@ pub enum TaskState {
 }
 
 impl TaskState {
+    /// Updates the state of the task to indicate that it is now blocked and
+    /// returns a copy of the new state.
+    #[allow(clippy::return_self_not_must_use)]
+    pub fn block(&mut self) -> Self {
+        match self {
+            TaskState::Running => {
+                *self = Self::Blocked;
+            }
+            TaskState::Blocked => {}
+            _ => unreachable!("Invalid state transition (blocked): {:?}", self),
+        }
+        *self
+    }
+
     /// Updates the state of the task to indicate that it is no longer running
     /// and is now suspended and return a copy of the new state.
     #[allow(clippy::return_self_not_must_use)]

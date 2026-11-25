@@ -4,9 +4,8 @@
 use alloc::{collections::VecDeque, sync::Arc};
 
 use crate::{
-    arch,
-    scheduler::{self, Policy, Task},
-    time::{duration::Duration, timer},
+    scheduler::{Policy, Preemption, Task, TaskSlice},
+    time::duration::Duration,
 };
 
 /// A simple round-robin scheduler policy implementation that maintains a queue
@@ -80,18 +79,13 @@ impl Policy for RoundRobin {
         self.runnable.pop_front()
     }
 
-    /// Executes the given task for a fixed time slice (defined by `QUANTUM`),
-    /// preempting it if it does not yield or block before the time slice
-    /// expires.
-    fn run_task(&mut self, task: &Arc<Task>) {
-        let _guard = timer::schedule_in(RoundRobin::QUANTUM, move |_| {
-            scheduler::set_need_reschedule(true);
-        });
-
-        while !scheduler::need_reschedule() {
-            arch::thread::execute(&mut task.thread().lock());
-            // TODO: Kernel work for user threads, like handling syscalls,
-            // should be done here using an async executor.
+    /// Preempts the task once it has consumed its fixed time slice (defined
+    /// by `QUANTUM`), regardless of the other runnable tasks.
+    fn task_tick(&mut self, _task: &Arc<Task>, tick: &TaskSlice) -> Preemption {
+        if tick.elapsed >= RoundRobin::QUANTUM {
+            Preemption::Preempt
+        } else {
+            Preemption::Continue
         }
     }
 }
