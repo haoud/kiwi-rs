@@ -20,8 +20,11 @@ pub const TEXT: Color = Color::Rgb(0xEB, 0xDB, 0xB2);
 /// Secondary text (labels, hints...).
 pub const MUTED: Color = Color::Rgb(0x92, 0x83, 0x74);
 
-/// The main accent color (titles, prompt...).
+/// The accent color, used sparingly (header badge and prompt).
 pub const ACCENT: Color = Color::Rgb(0xFE, 0x80, 0x19);
+
+/// The titles of the panels.
+pub const TITLE: Color = Color::Rgb(0xD5, 0xC4, 0xA1);
 
 /// Informative elements (names, values...).
 pub const INFO: Color = Color::Rgb(0x83, 0xA5, 0x98);
@@ -66,5 +69,5 @@ pub const fn muted() -> Style {
 /// The style of the titles of the panels.
 #[must_use]
 pub const fn title() -> Style {
-    Style::new().fg(ACCENT).add_modifier(Modifier::BOLD)
+    Style::new().fg(TITLE).add_modifier(Modifier::BOLD)
 }

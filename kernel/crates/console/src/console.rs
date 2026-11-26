@@ -147,10 +147,9 @@ impl<S: System> Console<S> {
         console.add_panel(Box::new(CpuPanel));
         console.add_panel(Box::new(MemoryPanel));
 
-        console.output.write_bold(
-            theme::ACCENT,
-            format_args!("{}\n", console.system.version()),
-        );
+        console
+            .output
+            .write_bold(theme::TEXT, format_args!("{}\n", console.system.version()));
         console.output.write_colored(
             theme::MUTED,
             format_args!("Type `help` to list the available commands.\n\n"),
@@ -462,7 +461,7 @@ impl<S: System> Console<S> {
                 .track_symbol(Some("│"))
                 .track_style(Style::new().fg(theme::BORDER))
                 .thumb_symbol("┃")
-                .thumb_style(Style::new().fg(theme::ACCENT))
+                .thumb_style(Style::new().fg(theme::MUTED))
                 .render(area.inner(Margin::new(0, 1)), buf, &mut state);
         }
     }
@@ -557,7 +556,7 @@ impl<S: System> Console<S> {
         let key = |text: &'static str| {
             Span::styled(
                 text,
-                Style::new().fg(theme::ACCENT).add_modifier(Modifier::BOLD),
+                Style::new().fg(theme::INFO).add_modifier(Modifier::BOLD),
             )
         };
         let label = |text: &'static str| Span::styled(text, theme::muted());

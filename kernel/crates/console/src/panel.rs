@@ -118,7 +118,7 @@ impl Panel for CpuPanel {
         render_key_value("average load", &value, summary, buf);
 
         let samples: Vec<u64> = stats.load_history.iter().copied().collect();
-        render_history(&samples, history, theme::ACCENT, buf);
+        render_history(&samples, history, theme::TEAL, buf);
 
         for (row, cpu) in cpus.rows().zip(&stats.cpus) {
             let label = Line::from(vec_spans([
