@@ -4,8 +4,8 @@
 //! system monitor) lives in the `console` crate, which does not depend on the
 //! kernel. This module only provides the kernel implementations of the
 //! abstractions it needs:
-//! - [`display::FramebufferDisplay`] draws the cells of the console on the
-//!   framebuffer with the embedded VGA font;
+//! - [`backend::FramebufferBackend`] is a Ratatui backend drawing the cells
+//!   of the terminal on the framebuffer with the embedded Terminus fonts;
 //! - [`input::KeyboardInput`] turns the events of the keyboard driver into
 //!   key presses, using the current keyboard layout;
 //! - [`input::Interval`] wakes up the console periodically with a timer;
@@ -23,8 +23,8 @@ use crate::{
     video::{Font, Framebuffer},
 };
 
+mod backend;
 mod commands;
-mod display;
 mod input;
 mod system;
 
@@ -44,8 +44,9 @@ pub fn start() {
         }
     };
 
-    let display = display::FramebufferDisplay::new(framebuffer, Font::default_font());
-    let (width, height) = console::screen::Display::size(&display);
+    let backend = backend::FramebufferBackend::new(framebuffer, Font::regular(), Font::bold());
+    let size = console::ratatui::backend::Backend::size(&backend).unwrap_or_default();
+    let (width, height) = (size.width, size.height);
     let mut console = Console::new(system::KernelSystem, width, height);
     commands::register(&mut console);
 
@@ -53,6 +54,6 @@ pub fn start() {
     let keyboard = input::KeyboardInput::new();
     let ticker = input::Interval::new(REFRESH_PERIOD);
     future::spawn(async move {
-        console.run(display, keyboard, ticker).await;
+        console.run(backend, keyboard, ticker).await;
     });
 }

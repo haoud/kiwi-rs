@@ -2,9 +2,12 @@
 //! the format used by the Linux console, which makes a lot of fonts available.
 use alloc::vec::Vec;
 
-/// The font embedded into the kernel: the classic VGA font, with 8x16 pixels
-/// glyphs covering Latin-1 and the box drawing characters.
-static DEFAULT_FONT: &[u8] = include_bytes!("../../assets/fonts/vga16.psf");
+/// The regular font embedded into the kernel: Terminus, with 8x16 pixels
+/// glyphs covering Latin-1, box drawing characters and some symbols.
+static REGULAR_FONT: &[u8] = include_bytes!("../../assets/fonts/terminus16.psf");
+
+/// The bold variant of the embedded font.
+static BOLD_FONT: &[u8] = include_bytes!("../../assets/fonts/terminus16-bold.psf");
 
 const PSF1_MAGIC: [u8; 2] = [0x36, 0x04];
 const PSF1_MODE_512: u8 = 0x01;
@@ -81,16 +84,35 @@ pub struct Font {
 
     /// The index of the glyph of the other characters, sorted by character.
     others: Vec<(char, u16)>,
+
+    /// The glyphs synthesized by [`Font::synthesize_missing`], whose indexes
+    /// follow the indexes of the glyphs of the font.
+    synthetic: Vec<u8>,
 }
 
 impl Font {
-    /// Parses the font embedded into the kernel.
+    /// Parses the regular font embedded into the kernel, completed with the
+    /// synthesized block elements and Braille patterns.
     ///
     /// # Panics
     /// Never panics in practice: the embedded font is known to be valid.
     #[must_use]
-    pub fn default_font() -> Self {
-        Self::parse(DEFAULT_FONT).expect("The embedded font is invalid")
+    pub fn regular() -> Self {
+        let mut font = Self::parse(REGULAR_FONT).expect("The embedded font is invalid");
+        font.synthesize_missing();
+        font
+    }
+
+    /// Parses the bold font embedded into the kernel, completed with the
+    /// synthesized block elements and Braille patterns.
+    ///
+    /// # Panics
+    /// Never panics in practice: the embedded font is known to be valid.
+    #[must_use]
+    pub fn bold() -> Self {
+        let mut font = Self::parse(BOLD_FONT).expect("The embedded font is invalid");
+        font.synthesize_missing();
+        font
     }
 
     /// Parses a PSF1 or PSF2 font.
@@ -195,7 +217,8 @@ impl Font {
         width: usize,
         height: usize,
     ) -> Result<Self, Error> {
-        if width == 0 || height == 0 || count == 0 || count > usize::from(u16::MAX) {
+        // Keep some room in the glyph indexes for the synthesized glyphs.
+        if width == 0 || height == 0 || count == 0 || count > usize::from(u16::MAX / 2) {
             return Err(Error::InvalidHeader);
         }
         let bytes_per_glyph = width.div_ceil(8) * height;
@@ -212,6 +235,7 @@ impl Font {
             bytes_per_glyph,
             latin1: [u16::MAX; 256],
             others: Vec::new(),
+            synthetic: Vec::new(),
         })
     }
 
@@ -269,13 +293,71 @@ impl Font {
                 .map(|i| self.others[i].1),
         }?;
 
-        let start = usize::from(index) * self.bytes_per_glyph;
-        Some(Glyph {
-            bitmap: &self.glyphs[start..start + self.bytes_per_glyph],
+        Some(self.glyph_at(usize::from(index)))
+    }
+
+    /// Returns the glyph at the given index, which may be a synthesized glyph.
+    fn glyph_at(&self, index: usize) -> Glyph<'_> {
+        let bitmap = if index < self.count {
+            let start = index * self.bytes_per_glyph;
+            &self.glyphs[start..start + self.bytes_per_glyph]
+        } else {
+            let start = (index - self.count) * self.bytes_per_glyph;
+            &self.synthetic[start..start + self.bytes_per_glyph]
+        };
+        Glyph {
+            bitmap,
             width: self.width,
             height: self.height,
             bytes_per_row: self.width.div_ceil(8),
-        })
+        }
+    }
+
+    /// Adds the block elements (U+2580 to U+259F) and the Braille patterns
+    /// (U+2800 to U+28FF) that are missing from the font, by drawing them
+    /// geometrically. Text user interfaces use them a lot (gauges, sparklines,
+    /// charts), and they are missing from most console fonts.
+    ///
+    /// The heavy horizontal and vertical lines (`━` and `┃`) are also drawn if
+    /// the font approximates them with the light lines, as most console fonts
+    /// with a limited number of glyphs do.
+    pub fn synthesize_missing(&mut self) {
+        let (width, height) = (self.width, self.height);
+        let heavy = [('\u{2501}', '\u{2500}'), ('\u{2503}', '\u{2502}')];
+        let characters = ('\u{2580}'..='\u{259F}')
+            .chain('\u{2800}'..='\u{28FF}')
+            .chain(heavy.iter().map(|&(heavy, _)| heavy));
+        for ch in characters {
+            if let Some(glyph) = self.glyph(ch) {
+                let approximated = heavy.iter().any(|&(heavy, light)| {
+                    heavy == ch && self.glyph(light).is_some_and(|l| l.bitmap == glyph.bitmap)
+                });
+                if !approximated {
+                    continue;
+                }
+                self.others.retain(|&(c, _)| c != ch);
+            }
+            let Some(pixel) = synthetic_pixel(ch, width, height) else {
+                continue;
+            };
+
+            let index = self.count + self.synthetic.len() / self.bytes_per_glyph;
+            let bytes_per_row = width.div_ceil(8);
+            for y in 0..height {
+                for byte in 0..bytes_per_row {
+                    let bits = (0..8)
+                        .filter(|bit| {
+                            let x = byte * 8 + bit;
+                            x < width && pixel(x, y)
+                        })
+                        .fold(0u8, |acc, bit| acc | (0x80 >> bit));
+                    self.synthetic.push(bits);
+                }
+            }
+            self.others
+                .push((ch, u16::try_from(index).unwrap_or(u16::MAX)));
+        }
+        self.others.sort_unstable_by_key(|&(ch, _)| ch);
     }
 
     /// Returns the glyph of a character, or the glyph of the replacement
@@ -286,11 +368,103 @@ impl Font {
         self.glyph(ch)
             .or_else(|| self.glyph(char::REPLACEMENT_CHARACTER))
             .or_else(|| self.glyph('?'))
-            .unwrap_or(Glyph {
-                bitmap: &self.glyphs[..self.bytes_per_glyph],
-                width: self.width,
-                height: self.height,
-                bytes_per_row: self.width.div_ceil(8),
-            })
+            .unwrap_or_else(|| self.glyph_at(0))
     }
+}
+
+/// Returns a function telling whether a pixel of a synthesized glyph is set,
+/// for the block elements and the Braille patterns, or `None` for the other
+/// characters.
+fn synthetic_pixel(ch: char, width: usize, height: usize) -> Option<impl Fn(usize, usize) -> bool> {
+    let code = u32::from(ch);
+    let (w, h) = (width, height);
+
+    // The pixel is set if it is inside the given rectangle, expressed in
+    // eighths of the cell.
+    let rect = move |x: usize, y: usize, (x0, y0, x1, y1): (usize, usize, usize, usize)| {
+        x * 8 >= x0 * w && x * 8 < x1 * w && y * 8 >= y0 * h && y * 8 < y1 * h
+    };
+    // Quadrants of the cell: upper left, upper right, lower left, lower right.
+    let quadrants = |mask: u8| {
+        move |x: usize, y: usize| {
+            let right = x * 2 >= w;
+            let lower = y * 2 >= h;
+            let bit = match (lower, right) {
+                (false, false) => 1,
+                (false, true) => 2,
+                (true, false) => 4,
+                (true, true) => 8,
+            };
+            mask & bit != 0
+        }
+    };
+
+    let pixel: alloc::boxed::Box<dyn Fn(usize, usize) -> bool> = match code {
+        // Heavy horizontal and vertical lines, 3 pixels thick for a 16 pixels
+        // high glyph, centered on the light lines.
+        0x2501 => {
+            alloc::boxed::Box::new(move |_, y| y + 1 >= h / 2 - h / 16 && y <= h / 2 - 1 + h / 16)
+        }
+        0x2503 => {
+            alloc::boxed::Box::new(move |x, _| x + 1 >= w / 2 - w / 8 && x <= w / 2 - 1 + w / 8)
+        }
+        // Upper half, and lower one to eight eighths.
+        0x2580 => alloc::boxed::Box::new(move |x, y| rect(x, y, (0, 0, 8, 4))),
+        0x2581..=0x2588 => {
+            let eighths = (code - 0x2580) as usize;
+            alloc::boxed::Box::new(move |x, y| rect(x, y, (0, 8 - eighths, 8, 8)))
+        }
+        // Left seven to one eighths.
+        0x2589..=0x258F => {
+            let eighths = (0x2590 - code) as usize;
+            alloc::boxed::Box::new(move |x, y| rect(x, y, (0, 0, eighths, 8)))
+        }
+        0x2590 => alloc::boxed::Box::new(move |x, y| rect(x, y, (4, 0, 8, 8))),
+        // Light, medium and dark shades.
+        0x2591 => alloc::boxed::Box::new(|x, y| x % 2 == 0 && y % 2 == 0),
+        0x2592 => alloc::boxed::Box::new(|x, y| (x + y) % 2 == 0),
+        0x2593 => alloc::boxed::Box::new(|x, y| !(x % 2 == 0 && y % 2 == 0)),
+        0x2594 => alloc::boxed::Box::new(move |x, y| rect(x, y, (0, 0, 8, 1))),
+        0x2595 => alloc::boxed::Box::new(move |x, y| rect(x, y, (7, 0, 8, 8))),
+        0x2596..=0x259F => {
+            const MASKS: [u8; 10] = [
+                4,
+                8,
+                1,
+                1 | 4 | 8,
+                1 | 8,
+                1 | 2 | 4,
+                1 | 2 | 8,
+                2,
+                2 | 4,
+                2 | 4 | 8,
+            ];
+            alloc::boxed::Box::new(quadrants(MASKS[(code - 0x2596) as usize]))
+        }
+        // Braille patterns: 2 columns of 4 dots, numbered from top to bottom
+        // in the left column (1, 2, 3, 7) then in the right one (4, 5, 6, 8).
+        0x2800..=0x28FF => {
+            let dots = u8::try_from(code - 0x2800).unwrap_or(0);
+            alloc::boxed::Box::new(move |x, y| {
+                let column = x * 2 / w;
+                let row = y * 4 / h;
+                let bit = match (column, row) {
+                    (0, 3) => 6,
+                    (1, 3) => 7,
+                    (0, row) => row,
+                    (_, row) => row + 3,
+                };
+                // Draw each dot as a square in the middle of its sub-cell.
+                let (sub_w, sub_h) = (w / 2, h / 4);
+                let (dx, dy) = (x % sub_w.max(1), y % sub_h.max(1));
+                let inside = dx >= sub_w / 4
+                    && dx < sub_w - sub_w / 4
+                    && dy >= sub_h / 4
+                    && dy < sub_h - sub_h / 4;
+                inside && dots & (1 << bit) != 0
+            })
+        }
+        _ => return None,
+    };
+    Some(pixel)
 }

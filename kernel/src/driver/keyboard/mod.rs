@@ -76,8 +76,10 @@ static QUEUE: Spinlock<Queue> = Spinlock::new(Queue::new());
 pub fn push_event(event: KeyEvent) {
     let waker = {
         let mut queue = QUEUE.lock_irq_safe();
+        // The queue is full when nobody consumes the events (e.g. when the
+        // kernel is built without the debug console): drop the event.
         if let Err(event) = queue.push(event) {
-            log::warn!("Keyboard: event queue full, dropping {:?}", event.code);
+            log::trace!("Keyboard: event queue full, dropping {:?}", event.code);
         }
         queue.waker.take()
     };

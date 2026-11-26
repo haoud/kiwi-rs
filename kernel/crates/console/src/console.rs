@@ -1,30 +1,43 @@
-//! The console itself: it ties together the screen, the line editor, the
-//! commands and the system monitor panel.
+//! The console itself: it ties together the terminal, the line editor, the
+//! commands and the panels of the sidebar.
 //!
-//! The screen is divided into four areas, from top to bottom:
-//! - a title bar, with the uptime of the system;
-//! - the system monitor panel, a stack of [`Widget`]s inside a frame;
-//! - the console area, with the output of the commands and the prompt;
-//! - a status bar, with the main keyboard shortcuts.
-use core::{fmt::Write, future::poll_fn, task::Poll};
+//! The screen is divided into four areas:
+//! - a header, with the name of the system, its uptime and its threads;
+//! - the shell, with the output of the commands and the prompt;
+//! - the sidebar on the right of the shell, a stack of [`Panel`]s;
+//! - a footer, with the main keyboard shortcuts.
+use core::{future::poll_fn, task::Poll};
 
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{boxed::Box, format, string::String, vec::Vec};
+use ratatui::{
+    Frame, Terminal,
+    backend::Backend,
+    buffer::Buffer,
+    layout::{Constraint, Layout, Margin, Rect},
+    style::{Modifier, Style},
+    text::{Line, Span},
+    widgets::{
+        Block, BorderType, Scrollbar, ScrollbarOrientation, ScrollbarState, StatefulWidget, Widget,
+    },
+};
 
 use crate::{
     builtins,
-    color::Color,
     command::{self, Command, Context, Error, Registry},
     editor::{History, LineEditor},
     format::Uptime,
     input::{Input, Key, KeyEvent, Ticker},
-    screen::{BorderStyle, Canvas, Cell, Display, Rect, Screen},
-    scrollback::Scrollback,
+    panel::{CpuPanel, MemoryPanel, Panel},
+    scrollback::{Scrollback, StyledChar},
     system::{Monitor, System},
-    widget::{CpuWidget, MemoryWidget, Widget},
+    theme,
 };
 
-/// The prompt displayed before the command line.
-const PROMPT: &str = "C:\\KIWI>";
+/// The name displayed before the prompt.
+const PROMPT_NAME: &str = "kiwi";
+
+/// The separator between the name and the command line.
+const PROMPT_SEPARATOR: &str = " › ";
 
 /// The maximum number of characters of a command line.
 const MAX_LINE_LENGTH: usize = 256;
@@ -38,31 +51,71 @@ const SCROLLBACK_CAPACITY: usize = 512;
 /// The maximum number of key presses processed before redrawing the screen.
 const MAX_KEYS_PER_FRAME: usize = 32;
 
-const TITLE_FG: Color = Color::Black;
-const TITLE_BG: Color = Color::LightGray;
-const PANEL_FG: Color = Color::White;
-const PANEL_BG: Color = Color::Blue;
-const PANEL_BORDER: Color = Color::LightCyan;
-const STATUS_FG: Color = Color::Black;
-const STATUS_BG: Color = Color::Cyan;
-const INPUT_FG: Color = Color::White;
+/// The width of the sidebar, in cells.
+const SIDEBAR_WIDTH: u16 = 46;
 
-/// A MS-DOS like console, generic over the system it displays information
-/// about.
+/// The minimum width of the screen to display the sidebar.
+const SIDEBAR_MIN_SCREEN_WIDTH: u16 = 100;
+
+/// The areas of the screen.
+struct Areas {
+    header: Rect,
+    shell: Rect,
+    sidebar: Option<Rect>,
+    footer: Rect,
+}
+
+impl Areas {
+    fn new(area: Rect) -> Self {
+        let [header, body, footer] = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Fill(1),
+            Constraint::Length(1),
+        ])
+        .areas(area);
+
+        if area.width >= SIDEBAR_MIN_SCREEN_WIDTH {
+            let [shell, sidebar] =
+                Layout::horizontal([Constraint::Fill(1), Constraint::Length(SIDEBAR_WIDTH)])
+                    .areas(body);
+            Self {
+                header,
+                shell,
+                sidebar: Some(sidebar),
+                footer,
+            }
+        } else {
+            Self {
+                header,
+                shell: body,
+                sidebar: None,
+                footer,
+            }
+        }
+    }
+
+    /// Returns the area inside the border of the shell, where the output and
+    /// the prompt are displayed. One column is kept free on the right for the
+    /// scrollbar.
+    fn shell_content(&self) -> Rect {
+        self.shell.inner(Margin::new(2, 1))
+    }
+}
+
+/// A modern text user interface console, generic over the system it displays
+/// information about.
 pub struct Console<S> {
     system: S,
-    screen: Screen,
-    width: u16,
-    height: u16,
+    area: Rect,
 
     output: Scrollback,
     editor: LineEditor,
     history: History,
     commands: Registry,
-    widgets: Vec<Box<dyn Widget>>,
+    panels: Vec<Box<dyn Panel>>,
     monitor: Monitor,
 
-    /// The number of rows the console area is scrolled back by.
+    /// The number of rows the shell is scrolled back by.
     scroll: usize,
 
     /// Whether the blinking cursor is currently visible.
@@ -70,33 +123,38 @@ pub struct Console<S> {
 }
 
 impl<S: System> Console<S> {
-    /// Creates a new console of the given size, in cells, with the builtin
-    /// commands and the default widgets (memory and CPU usage).
+    /// Creates a new console for a screen of the given size, in cells, with
+    /// the builtin commands and the default panels (CPU and memory usage).
     #[must_use]
     pub fn new(system: S, width: u16, height: u16) -> Self {
         let mut commands = Registry::new();
         builtins::register(&mut commands);
 
+        let area = Rect::new(0, 0, width, height);
+        let content = Areas::new(area).shell_content();
         let mut console = Self {
-            screen: Screen::new(width, height),
-            width,
-            height,
-            output: Scrollback::new(width, SCROLLBACK_CAPACITY),
+            area,
+            output: Scrollback::new(content.width, SCROLLBACK_CAPACITY),
             editor: LineEditor::new(MAX_LINE_LENGTH),
             history: History::new(HISTORY_CAPACITY),
             commands,
-            widgets: Vec::new(),
+            panels: Vec::new(),
             monitor: Monitor::new(),
             scroll: 0,
             cursor_visible: true,
             system,
         };
-        console.add_widget(Box::new(MemoryWidget));
-        console.add_widget(Box::new(CpuWidget));
+        console.add_panel(Box::new(CpuPanel));
+        console.add_panel(Box::new(MemoryPanel));
 
-        _ = writeln!(console.output, "{}", console.system.version());
-        _ = writeln!(console.output, "Type HELP to list the available commands.");
-        _ = writeln!(console.output);
+        console.output.write_bold(
+            theme::ACCENT,
+            format_args!("{}\n", console.system.version()),
+        );
+        console.output.write_colored(
+            theme::MUTED,
+            format_args!("Type `help` to list the available commands.\n\n"),
+        );
         console.monitor.refresh(&console.system);
         console
     }
@@ -107,9 +165,9 @@ impl<S: System> Console<S> {
         self.commands.register(command);
     }
 
-    /// Adds a widget at the bottom of the system monitor panel.
-    pub fn add_widget(&mut self, widget: Box<dyn Widget>) {
-        self.widgets.push(widget);
+    /// Adds a panel at the bottom of the sidebar.
+    pub fn add_panel(&mut self, panel: Box<dyn Panel>) {
+        self.panels.push(panel);
     }
 
     /// Returns the output of the console, to write messages into it.
@@ -117,18 +175,23 @@ impl<S: System> Console<S> {
         &mut self.output
     }
 
-    /// Runs the console forever: waits for key presses and ticks, handles
-    /// them and redraws the screen.
-    pub async fn run<D, I, T>(mut self, mut display: D, mut input: I, mut ticker: T) -> !
+    /// Runs the console forever on the given backend: waits for key presses
+    /// and ticks, handles them and redraws the screen. Ratatui only sends to
+    /// the backend the cells that changed since the previous frame.
+    pub async fn run<B, I, T>(mut self, backend: B, mut input: I, mut ticker: T) -> !
     where
-        D: Display,
+        B: Backend,
         I: Input,
         T: Ticker,
     {
+        let mut terminal = Terminal::new(backend).ok();
         let mut keys = Vec::with_capacity(MAX_KEYS_PER_FRAME);
-        self.draw(&mut display);
 
         loop {
+            if let Some(terminal) = &mut terminal {
+                _ = terminal.draw(|frame| self.render(frame));
+            }
+
             // Wait until at least one key is pressed or the ticker fires, and
             // collect all the keys already available so that the screen is
             // redrawn only once for a burst of key presses.
@@ -155,7 +218,6 @@ impl<S: System> Console<S> {
             if tick {
                 self.tick();
             }
-            self.draw(&mut display);
         }
     }
 
@@ -177,12 +239,20 @@ impl<S: System> Console<S> {
         }
         if event.is_ctrl('c') {
             let line = self.editor.take();
-            _ = writeln!(self.output, "{PROMPT}{line}^C");
+            self.echo_prompt(&line);
+            self.output
+                .write_colored(theme::ERROR, format_args!(" ^C\n"));
             self.scroll = 0;
             return;
         }
 
-        let page = usize::from(self.console_area().height.saturating_sub(1).max(1));
+        let page = usize::from(
+            Areas::new(self.area)
+                .shell_content()
+                .height
+                .saturating_sub(1)
+                .max(1),
+        );
         match event.key {
             Key::Char(ch) if !event.modifiers.ctrl && !event.modifiers.alt => {
                 self.editor.insert(ch);
@@ -215,11 +285,20 @@ impl<S: System> Console<S> {
         }
     }
 
+    /// Writes the prompt followed by a command line into the output.
+    fn echo_prompt(&mut self, line: &str) {
+        self.output
+            .write_bold(theme::ACCENT, format_args!("{PROMPT_NAME}"));
+        self.output
+            .write_colored(theme::MUTED, format_args!("{PROMPT_SEPARATOR}"));
+        self.output
+            .write_colored(theme::TEXT, format_args!("{line}"));
+    }
+
     /// Executes a command line, as if it was typed by the user.
     pub fn execute(&mut self, line: &str) {
-        _ = write!(self.output, "{PROMPT}");
-        self.output
-            .write_colored(INPUT_FG, format_args!("{line}\n"));
+        self.echo_prompt(line);
+        self.output.put_char('\n');
         self.history.push(line);
 
         let words = command::split(line);
@@ -228,9 +307,10 @@ impl<S: System> Console<S> {
         };
 
         match self.commands.find(name).copied() {
-            None => {
-                _ = writeln!(self.output, "Bad command or file name");
-            }
+            None => self.output.write_colored(
+                theme::ERROR,
+                format_args!("Unknown command `{name}`. Type `help` to list the commands.\n"),
+            ),
             Some(command) => {
                 let mut context = Context {
                     out: &mut self.output,
@@ -240,27 +320,23 @@ impl<S: System> Console<S> {
                     history: &self.history,
                 };
                 let result = (command.handler)(&mut context, args);
-                self.output.reset_color();
+                self.output.reset_style();
                 self.output.finish_line();
 
                 match result {
                     Ok(()) => {}
                     Err(Error::Usage) => self.output.write_colored(
-                        Color::Yellow,
-                        format_args!(
-                            "Usage: {} {}\n",
-                            command.name.to_ascii_uppercase(),
-                            command.usage
-                        ),
+                        theme::WARNING,
+                        format_args!("usage: {} {}\n", command.name, command.usage),
                     ),
                     Err(Error::Failed(reason)) => self
                         .output
-                        .write_colored(Color::LightRed, format_args!("{reason}\n")),
+                        .write_colored(theme::ERROR, format_args!("{reason}\n")),
                 }
             }
         }
 
-        // Separate the output of each command with a blank line, like MS-DOS.
+        // Separate the output of each command with a blank line.
         if !self.output.is_empty() {
             self.output.put_char('\n');
         }
@@ -298,192 +374,233 @@ impl<S: System> Console<S> {
             self.editor.insert(' ');
         } else if common.len() <= text.len() {
             // Nothing more can be completed: list the candidates.
-            _ = writeln!(self.output, "{PROMPT}{text}");
+            self.echo_prompt(&text);
+            self.output.put_char('\n');
             let names: Vec<&str> = self.commands.starting_with(&text).map(|c| c.name).collect();
-            _ = writeln!(self.output, "{}", names.join("  "));
+            self.output
+                .write_colored(theme::INFO, format_args!("{}\n", names.join("  ")));
             self.scroll = 0;
         }
     }
 
-    /// Composes the screen and draws the cells that changed on the display.
-    pub fn draw<D: Display + ?Sized>(&mut self, display: &mut D) {
-        self.compose();
-        self.screen.present(display);
-    }
+    /// Renders the whole screen into a frame.
+    pub fn render(&mut self, frame: &mut Frame<'_>) {
+        let area = frame.area();
+        let areas = Areas::new(area);
+        let buf = frame.buffer_mut();
+        Block::new().style(theme::text()).render(area, buf);
 
-    /// Forces the next frame to redraw the whole screen, for example after
-    /// the display was modified by someone else.
-    pub fn invalidate(&mut self) {
-        self.screen.invalidate();
-    }
-
-    /// Returns the height of the system monitor panel, or 0 if the screen is
-    /// too small to display it.
-    fn panel_height(&self) -> u16 {
-        let inner = self.width.saturating_sub(4);
-        let stats = self.monitor.stats();
-        let content: u16 = self.widgets.iter().map(|w| w.height(stats, inner)).sum();
-        let height = content + 2;
-
-        // Keep at least a few rows for the console area.
-        if self.height >= height + 2 + 5 {
-            height
-        } else {
-            0
+        self.render_header(areas.header, buf);
+        self.render_shell(areas.shell, buf);
+        if let Some(sidebar) = areas.sidebar {
+            self.render_sidebar(sidebar, buf);
         }
+        self.render_footer(areas.footer, buf);
     }
 
-    /// Returns the area of the screen where the output and the prompt are
-    /// displayed.
-    fn console_area(&self) -> Rect {
-        let top = 1 + self.panel_height();
-        Rect::new(0, top, self.width, self.height.saturating_sub(top + 1))
-    }
-
-    fn compose(&mut self) {
-        let panel_height = self.panel_height();
-        let area = self.console_area();
+    fn render_header(&self, area: Rect, buf: &mut Buffer) {
         let stats = self.monitor.stats();
-        let mut canvas = self.screen.canvas();
+        Block::new()
+            .style(Style::new().bg(theme::BACKGROUND_DARK))
+            .render(area, buf);
 
-        // Title bar.
-        let mut title = canvas.sub(Rect::new(0, 0, self.width, 1));
-        title.set_colors(TITLE_FG, TITLE_BG);
-        title.fill(' ');
-        title.text(1, 0, "■ ");
-        title.text(3, 0, self.system.version());
-        title.text_right(
-            0,
-            &alloc::format!(
-                "Uptime {}  Threads {} ",
-                Uptime(stats.uptime),
-                stats.threads
+        let left = Line::from(alloc::vec![
+            Span::styled(
+                " kiwi ",
+                Style::new()
+                    .fg(theme::BACKGROUND)
+                    .bg(theme::ACCENT)
+                    .add_modifier(Modifier::BOLD),
             ),
-        );
+            Span::styled("  debug console", theme::muted()),
+        ]);
+        buf.set_line(area.x, area.y, &left, area.width);
 
-        // System monitor panel.
-        if panel_height > 0 {
-            let mut panel = canvas.sub(Rect::new(0, 1, self.width, panel_height));
-            panel.set_colors(PANEL_BORDER, PANEL_BG);
-            panel.fill(' ');
-            panel.frame(BorderStyle::Double, Some(" System Monitor "));
-            panel.set_fg(PANEL_FG);
+        let right = Line::from(alloc::vec![
+            Span::styled(self.system.version(), theme::muted()),
+            Span::styled("  ·  up ", theme::muted()),
+            Span::styled(
+                format!("{}", Uptime(stats.uptime)),
+                Style::new().fg(theme::TEXT)
+            ),
+            Span::styled("  ·  ", theme::muted()),
+            Span::styled(format!("{}", stats.threads), Style::new().fg(theme::TEXT)),
+            Span::styled(" threads ", theme::muted()),
+        ]);
+        let width = u16::try_from(right.width())
+            .unwrap_or(u16::MAX)
+            .min(area.width);
+        buf.set_line(area.right() - width, area.y, &right, width);
+    }
 
-            let inner = self.width.saturating_sub(4);
-            let mut y = 1;
-            for widget in &self.widgets {
-                let height = widget.height(stats, inner);
-                widget.draw(stats, &mut panel.sub(Rect::new(2, y, inner, height)));
-                y += height;
-            }
-        }
-
-        // Console area.
-        let mut console = canvas.sub(area);
-        let scroll = draw_console_area(
-            &mut console,
-            &self.output,
-            &self.editor,
-            self.scroll,
-            self.cursor_visible,
-        );
+    fn render_shell(&mut self, area: Rect, buf: &mut Buffer) {
+        let content = area.inner(Margin::new(2, 1));
+        let (total, scroll) = self.render_shell_content(content, buf);
         self.scroll = scroll;
 
-        // Status bar.
-        let mut status_bar = canvas.sub(Rect::new(0, self.height.saturating_sub(1), self.width, 1));
-        status_bar.set_colors(STATUS_FG, STATUS_BG);
-        status_bar.fill(' ');
-        status_bar.text(
-            1,
-            0,
-            "F1=Help  \u{2191}\u{2193}=History  Tab=Complete  PgUp/PgDn=Scroll  \
-             Ctrl+L=Clear  Ctrl+C=Cancel",
-        );
-        let position = if scroll > 0 {
-            status_bar.set_fg(Color::Red);
-            alloc::format!("Scrolled back {scroll} ")
-        } else {
-            alloc::format!("{} lines ", self.output.len())
+        let mut block = panel_block("shell");
+        if scroll > 0 {
+            block = block.title_top(
+                Line::from(Span::styled(
+                    format!(" scrolled back {scroll} lines "),
+                    Style::new().fg(theme::WARNING),
+                ))
+                .right_aligned(),
+            );
+        }
+        block.render(area, buf);
+
+        // Display a scrollbar on the right border when the content does not
+        // fit in the shell.
+        let height = usize::from(content.height);
+        if total > height {
+            let max_scroll = total - height;
+            let mut state = ScrollbarState::new(max_scroll + 1).position(max_scroll - scroll);
+            Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(None)
+                .end_symbol(None)
+                .track_symbol(Some("│"))
+                .track_style(Style::new().fg(theme::BORDER))
+                .thumb_symbol("┃")
+                .thumb_style(Style::new().fg(theme::ACCENT))
+                .render(area.inner(Margin::new(0, 1)), buf, &mut state);
+        }
+    }
+
+    /// Draws the output and the prompt in the given area, and returns the
+    /// total number of rows of the content and the scroll offset actually
+    /// used (the requested one, clamped to the content).
+    fn render_shell_content(&self, area: Rect, buf: &mut Buffer) -> (usize, usize) {
+        let width = usize::from(area.width.max(1));
+        let height = usize::from(area.height);
+
+        // The prompt and the command line, wrapped on as many rows as needed.
+        let styled = |ch, fg, bold| StyledChar { ch, fg, bold };
+        let prompt: Vec<StyledChar> = PROMPT_NAME
+            .chars()
+            .map(|ch| styled(ch, theme::ACCENT, true))
+            .chain(
+                PROMPT_SEPARATOR
+                    .chars()
+                    .map(|ch| styled(ch, theme::MUTED, false)),
+            )
+            .chain(
+                self.editor
+                    .chars()
+                    .iter()
+                    .map(|&ch| styled(ch, theme::TEXT, false)),
+            )
+            .collect();
+        let prompt_length = PROMPT_NAME.chars().count() + PROMPT_SEPARATOR.chars().count();
+        let cursor = prompt_length + self.editor.cursor();
+        let prompt_rows = prompt.len() / width + 1;
+
+        let total = self.output.len() + prompt_rows;
+        let scroll = self.scroll.min(total.saturating_sub(height));
+        let first = total.saturating_sub(height + scroll);
+
+        for (row, y) in (area.top()..area.bottom()).enumerate() {
+            let index = first + row;
+            let cells: &[StyledChar] = if let Some(line) = self.output.line(index) {
+                line
+            } else if let Some(prompt_row) = index.checked_sub(self.output.len())
+                && prompt_row < prompt_rows
+            {
+                let start = (prompt_row * width).min(prompt.len());
+                let end = (start + width).min(prompt.len());
+                &prompt[start..end]
+            } else {
+                &[]
+            };
+
+            for (cell, x) in cells.iter().zip(area.left()..area.right()) {
+                let mut style = Style::new().fg(cell.fg);
+                if cell.bold {
+                    style = style.add_modifier(Modifier::BOLD);
+                }
+                buf[(x, y)].set_char(cell.ch).set_style(style);
+            }
+
+            // Draw a block cursor.
+            let prompt_row = index.checked_sub(self.output.len());
+            if self.cursor_visible && prompt_row == Some(cursor / width) {
+                let column = u16::try_from(cursor % width).unwrap_or(0);
+                buf[(area.x + column, y)]
+                    .set_style(Style::new().fg(theme::BACKGROUND).bg(theme::TEXT));
+            }
+        }
+        (total, scroll)
+    }
+
+    fn render_sidebar(&self, area: Rect, buf: &mut Buffer) {
+        let stats = self.monitor.stats();
+        let mut y = area.y;
+        for panel in &self.panels {
+            let inner_width = area.width.saturating_sub(4);
+            let height = panel.height(stats, inner_width) + 2;
+            let rect = Rect::new(area.x, y, area.width, height).intersection(area);
+            if rect.height < 3 {
+                break;
+            }
+
+            panel_block(panel.title()).render(rect, buf);
+            panel.render(stats, rect.inner(Margin::new(2, 1)), buf);
+            y += height;
+        }
+    }
+
+    fn render_footer(&self, area: Rect, buf: &mut Buffer) {
+        Block::new()
+            .style(Style::new().bg(theme::BACKGROUND_DARK))
+            .render(area, buf);
+
+        let key = |text: &'static str| {
+            Span::styled(
+                text,
+                Style::new().fg(theme::ACCENT).add_modifier(Modifier::BOLD),
+            )
         };
-        status_bar.text_right(0, &position);
+        let label = |text: &'static str| Span::styled(text, theme::muted());
+        let hints = Line::from(alloc::vec![
+            Span::raw(" "),
+            key("F1"),
+            label(" help   "),
+            key("↑↓"),
+            label(" history   "),
+            key("Tab"),
+            label(" complete   "),
+            key("PgUp/PgDn"),
+            label(" scroll   "),
+            key("^L"),
+            label(" clear   "),
+            key("^C"),
+            label(" cancel"),
+        ]);
+        buf.set_line(area.x, area.y, &hints, area.width);
+
+        let lines: String = format!("{} lines ", self.output.len());
+        let width = u16::try_from(lines.len())
+            .unwrap_or(u16::MAX)
+            .min(area.width);
+        buf.set_string(area.right() - width, area.y, &lines, theme::muted());
     }
 }
 
-/// Draws the output and the prompt on the console area, and returns the
-/// scroll offset actually used (the requested one, clamped to the content).
-fn draw_console_area(
-    canvas: &mut Canvas<'_>,
-    output: &Scrollback,
-    editor: &LineEditor,
-    scroll: usize,
-    cursor_visible: bool,
-) -> usize {
-    let width = usize::from(canvas.width().max(1));
-    let height = usize::from(canvas.height());
-    let blank = Cell::new(' ', Scrollback::DEFAULT_FG, Scrollback::DEFAULT_BG);
-
-    // The prompt and the command line, wrapped on as many rows as needed.
-    let prompt: Vec<Cell> = PROMPT
-        .chars()
-        .map(|ch| Cell::new(ch, Scrollback::DEFAULT_FG, Scrollback::DEFAULT_BG))
-        .chain(
-            editor
-                .chars()
-                .iter()
-                .map(|&ch| Cell::new(ch, INPUT_FG, Scrollback::DEFAULT_BG)),
-        )
-        .collect();
-    let cursor = PROMPT.chars().count() + editor.cursor();
-    let prompt_rows = prompt.len() / width + 1;
-
-    let total = output.len() + prompt_rows;
-    let scroll = scroll.min(total.saturating_sub(height));
-    let first = total.saturating_sub(height + scroll);
-
-    for row in 0..height {
-        let index = first + row;
-        let cells: &[Cell] = if let Some(line) = output.line(index) {
-            line
-        } else if let Some(prompt_row) = index.checked_sub(output.len())
-            && prompt_row < prompt_rows
-        {
-            let start = (prompt_row * width).min(prompt.len());
-            let end = (start + width).min(prompt.len());
-            &prompt[start..end]
-        } else {
-            &[]
-        };
-
-        // Both values are bounded by the size of the canvas.
-        #[allow(clippy::cast_possible_truncation)]
-        let y = row as u16;
-        for column in 0..width {
-            #[allow(clippy::cast_possible_truncation)]
-            let x = column as u16;
-            canvas.put_cell(x, y, cells.get(column).copied().unwrap_or(blank));
-        }
-
-        let prompt_row = index.checked_sub(output.len());
-        if cursor_visible && prompt_row == Some(cursor / width) {
-            let column = cursor % width;
-            let cell = cells.get(column).copied().unwrap_or(blank);
-            // Draw a block cursor, like the VGA text mode.
-            #[allow(clippy::cast_possible_truncation)]
-            canvas.put_cell(
-                column as u16,
-                y,
-                Cell::new(cell.ch, Color::Black, Color::LightGray),
-            );
-        }
-    }
-    scroll
+/// Returns the block surrounding a panel: rounded borders and a title.
+fn panel_block(title: &str) -> Block<'_> {
+    Block::bordered()
+        .border_type(BorderType::Rounded)
+        .border_style(Style::new().fg(theme::BORDER))
+        .title(Line::from(Span::styled(
+            format!(" {title} "),
+            theme::title(),
+        )))
 }
 
 impl<S> core::fmt::Debug for Console<S> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Console")
-            .field("width", &self.width)
-            .field("height", &self.height)
+            .field("area", &self.area)
             .field("scroll", &self.scroll)
             .finish_non_exhaustive()
     }

@@ -7,9 +7,9 @@
 use core::fmt::Write;
 
 use crate::{
-    color::Color,
     command::{Command, Context, Error, Registry},
     format::{Bytes, Percent, Uptime},
+    theme,
 };
 
 /// Registers all the builtin commands.
@@ -75,15 +75,15 @@ fn help(ctx: &mut Context<'_>, args: &[&str]) -> Result<(), Error> {
         [] => {
             let width = ctx.commands.iter().map(|c| c.name.len()).max().unwrap_or(0);
             for command in ctx.commands.iter() {
-                ctx.out.write_colored(
-                    Color::White,
-                    format_args!("  {:width$}", command.name.to_ascii_uppercase()),
-                );
-                _ = writeln!(ctx.out, "  {}", command.summary);
+                ctx.out
+                    .write_bold(theme::INFO, format_args!("  {:width$}", command.name));
+                ctx.out
+                    .write_colored(theme::MUTED, format_args!("  {}\n", command.summary));
             }
-            _ = writeln!(
-                ctx.out,
-                "Type HELP <command> for more information on a command."
+            _ = writeln!(ctx.out);
+            ctx.out.write_colored(
+                theme::MUTED,
+                format_args!("Type `help <command>` for more information on a command.\n"),
             );
             Ok(())
         }
@@ -91,13 +91,12 @@ fn help(ctx: &mut Context<'_>, args: &[&str]) -> Result<(), Error> {
             let command = ctx
                 .commands
                 .find(name)
-                .ok_or_else(|| Error::Failed(alloc::format!("Unknown command: {name}")))?;
+                .ok_or_else(|| Error::Failed(alloc::format!("Unknown command `{name}`")))?;
             _ = writeln!(ctx.out, "{}", command.summary);
-            _ = writeln!(ctx.out);
-            _ = write!(ctx.out, "Usage: ");
-            ctx.out.write_colored(
-                Color::White,
-                format_args!("{} {}\n", command.name.to_ascii_uppercase(), command.usage),
+            ctx.out.write_colored(theme::MUTED, format_args!("usage: "));
+            ctx.out.write_bold(
+                theme::INFO,
+                format_args!("{} {}\n", command.name, command.usage),
             );
             Ok(())
         }
@@ -133,7 +132,7 @@ fn mem(ctx: &mut Context<'_>, _: &[&str]) -> Result<(), Error> {
     ];
 
     ctx.out.write_colored(
-        Color::White,
+        theme::INFO,
         format_args!(
             "{:<16} {:>11} {:>11} {:>11} {:>7}\n",
             "Pool", "Total", "Used", "Free", "Usage"
@@ -148,7 +147,7 @@ fn mem(ctx: &mut Context<'_>, _: &[&str]) -> Result<(), Error> {
             Bytes(usage.free()),
         );
         ctx.out.write_colored(
-            Color::for_usage(usage.permille()),
+            theme::usage(usage.permille()),
             format_args!("{:>7}\n", Percent(usage.permille())),
         );
     }
@@ -158,11 +157,11 @@ fn mem(ctx: &mut Context<'_>, _: &[&str]) -> Result<(), Error> {
 fn cpu(ctx: &mut Context<'_>, _: &[&str]) -> Result<(), Error> {
     let stats = ctx.stats;
     ctx.out
-        .write_colored(Color::White, format_args!("{:<6} {:>7}\n", "CPU", "Load"));
+        .write_colored(theme::INFO, format_args!("{:<6} {:>7}\n", "CPU", "Load"));
     for cpu in &stats.cpus {
         _ = write!(ctx.out, "{:<6} ", cpu.id);
         ctx.out.write_colored(
-            Color::for_usage(cpu.permille),
+            theme::usage(cpu.permille),
             format_args!("{:>7}\n", Percent(cpu.permille)),
         );
     }
@@ -188,7 +187,6 @@ fn uptime(ctx: &mut Context<'_>, _: &[&str]) -> Result<(), Error> {
 }
 
 fn ver(ctx: &mut Context<'_>, _: &[&str]) -> Result<(), Error> {
-    _ = writeln!(ctx.out);
     _ = writeln!(ctx.out, "{}", ctx.system.version());
     Ok(())
 }

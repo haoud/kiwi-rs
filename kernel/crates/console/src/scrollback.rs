@@ -3,8 +3,17 @@
 use core::fmt;
 
 use alloc::{collections::VecDeque, vec::Vec};
+use ratatui::style::Color;
 
-use crate::{color::Color, screen::Cell};
+use crate::theme;
+
+/// A character written to the scrollback, with its color.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct StyledChar {
+    pub ch: char,
+    pub fg: Color,
+    pub bold: bool,
+}
 
 /// The lines written to the console. Lines longer than the width of the
 /// console are wrapped when they are written, so each line can be displayed
@@ -13,20 +22,14 @@ use crate::{color::Color, screen::Cell};
 pub struct Scrollback {
     /// The lines, from the oldest to the newest. The last line is the one
     /// currently being written: it is never displayed if it is empty.
-    lines: VecDeque<Vec<Cell>>,
+    lines: VecDeque<Vec<StyledChar>>,
     width: usize,
     capacity: usize,
     fg: Color,
-    bg: Color,
+    bold: bool,
 }
 
 impl Scrollback {
-    /// The color used for regular text.
-    pub const DEFAULT_FG: Color = Color::LightGray;
-
-    /// The background color of the console.
-    pub const DEFAULT_BG: Color = Color::Black;
-
     /// Creates an empty scrollback of the given width, that keeps at most
     /// `capacity` lines.
     #[must_use]
@@ -37,8 +40,8 @@ impl Scrollback {
             lines,
             width: usize::from(width.max(1)),
             capacity: capacity.max(1),
-            fg: Self::DEFAULT_FG,
-            bg: Self::DEFAULT_BG,
+            fg: theme::TEXT,
+            bold: false,
         }
     }
 
@@ -60,7 +63,7 @@ impl Scrollback {
 
     /// Returns the line at the given index, 0 being the oldest line.
     #[must_use]
-    pub fn line(&self, index: usize) -> Option<&[Cell]> {
+    pub fn line(&self, index: usize) -> Option<&[StyledChar]> {
         if index < self.len() {
             self.lines.get(index).map(Vec::as_slice)
         } else {
@@ -79,10 +82,10 @@ impl Scrollback {
         self.fg = fg;
     }
 
-    /// Restores the default color of the text.
-    pub fn reset_color(&mut self) {
-        self.fg = Self::DEFAULT_FG;
-        self.bg = Self::DEFAULT_BG;
+    /// Restores the default style of the text.
+    pub fn reset_style(&mut self) {
+        self.fg = theme::TEXT;
+        self.bold = false;
     }
 
     /// Writes the formatted arguments with the given color, then restores the
@@ -92,6 +95,15 @@ impl Scrollback {
         self.fg = fg;
         _ = fmt::Write::write_fmt(self, args);
         self.fg = previous;
+    }
+
+    /// Writes the formatted arguments in bold with the given color, then
+    /// restores the previous style.
+    pub fn write_bold(&mut self, fg: Color, args: fmt::Arguments<'_>) {
+        let previous = self.bold;
+        self.bold = true;
+        self.write_colored(fg, args);
+        self.bold = previous;
     }
 
     /// Ends the current line, unless it is already empty.
@@ -122,11 +134,15 @@ impl Scrollback {
         if self.current().len() >= self.width {
             self.new_line();
         }
-        let cell = Cell::new(ch, self.fg, self.bg);
-        self.current().push(cell);
+        let styled = StyledChar {
+            ch,
+            fg: self.fg,
+            bold: self.bold,
+        };
+        self.current().push(styled);
     }
 
-    fn current(&mut self) -> &mut Vec<Cell> {
+    fn current(&mut self) -> &mut Vec<StyledChar> {
         // There is always at least one line in the scrollback.
         self.lines.back_mut().expect("Scrollback without lines")
     }

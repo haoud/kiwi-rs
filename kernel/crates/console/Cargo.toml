@@ -8,6 +8,7 @@ edition = "2024"
 # `system`, `input` and `screen`. This allows to reuse it unchanged once it is
 # ported to userspace.
 [dependencies]
+ratatui = { version = "0.30", default-features = false }
 
 [lints]
 workspace = true

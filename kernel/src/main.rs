@@ -13,6 +13,7 @@ use macros::init;
 
 pub mod arch;
 pub mod config;
+#[cfg(feature = "debug-console")]
 pub mod debug;
 pub mod driver;
 pub mod future;
@@ -45,6 +46,7 @@ pub unsafe fn main() -> ! {
     driver::setup();
     log::info!("Boot completed !");
 
+    #[cfg(feature = "debug-console")]
     debug::console::start();
     scheduler::run();
 }

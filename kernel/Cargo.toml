@@ -31,7 +31,7 @@ arrayvec = { workspace = true }
 bitfield = { workspace = true }
 bitflags = { workspace = true }
 zerocopy = { workspace = true }
-console = { workspace = true }
+console = { workspace = true, optional = true }
 macros = { workspace = true }
 log = { workspace = true }
 
@@ -49,6 +49,11 @@ limine = { version = "0.5" }
 [features]
 default = ["logging"]
 logging = []
+
+# The debug console on the framebuffer, with its text user interface. It is
+# meant to debug the kernel and is not included by default to keep release
+# builds small: use `make build-debug` or `make run-debug` to enable it.
+debug-console = ["dep:console"]
 
 [lints]
 workspace = true

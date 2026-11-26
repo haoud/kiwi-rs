@@ -3,8 +3,9 @@ use core::fmt::Write;
 
 use alloc::format;
 use console::{
-    Color, Console,
+    Console,
     command::{self, Command, Context, Error},
+    theme,
 };
 
 use crate::{
@@ -57,7 +58,7 @@ const MAX_STRESS_SECONDS: u64 = 300;
 fn ps(ctx: &mut Context<'_>, _: &[&str]) -> Result<(), Error> {
     let tasks = scheduler::tasks();
     ctx.out
-        .write_colored(Color::White, format_args!("{:>6}  {}\n", "ID", "STATE"));
+        .write_colored(theme::INFO, format_args!("{:>6}  {}\n", "ID", "STATE"));
     for (id, state) in &tasks {
         _ = writeln!(ctx.out, "{id:>6}  {state:?}");
     }

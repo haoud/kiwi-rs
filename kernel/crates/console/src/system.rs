@@ -1,7 +1,7 @@
 //! The information about the system displayed by the console.
 use core::time::Duration;
 
-use alloc::vec::Vec;
+use alloc::{collections::VecDeque, vec::Vec};
 
 use crate::format;
 
@@ -69,6 +69,9 @@ pub struct CpuLoad {
     pub permille: u32,
 }
 
+/// The number of samples kept in the history of the statistics.
+pub const HISTORY_LENGTH: usize = 128;
+
 /// A snapshot of the state of the system, taken by [`Monitor::refresh`].
 #[derive(Debug, Clone, Default)]
 pub struct Stats {
@@ -77,6 +80,14 @@ pub struct Stats {
     pub heap: MemoryUsage,
     pub cpus: Vec<CpuLoad>,
     pub threads: usize,
+
+    /// The average load of the CPUs at the last samples, in per mille, from
+    /// the oldest to the newest.
+    pub load_history: VecDeque<u64>,
+
+    /// The usage of the physical memory at the last samples, in per mille,
+    /// from the oldest to the newest.
+    pub memory_history: VecDeque<u64>,
 }
 
 impl Stats {
@@ -144,5 +155,18 @@ impl Monitor {
         self.stats.memory = system.physical_memory();
         self.stats.heap = system.heap_memory();
         self.stats.threads = system.thread_count();
+
+        let (load, memory) = (self.stats.total_load(), self.stats.memory.permille());
+        push_sample(&mut self.stats.load_history, u64::from(load));
+        push_sample(&mut self.stats.memory_history, u64::from(memory));
     }
+}
+
+/// Appends a sample to a history, forgetting the oldest sample if the history
+/// is full.
+fn push_sample(history: &mut VecDeque<u64>, sample: u64) {
+    if history.len() == HISTORY_LENGTH {
+        history.pop_front();
+    }
+    history.push_back(sample);
 }

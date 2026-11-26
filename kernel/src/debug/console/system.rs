@@ -13,7 +13,7 @@ pub struct KernelSystem;
 
 impl System for KernelSystem {
     fn version(&self) -> &'static str {
-        concat!("Kiwi [Version ", env!("CARGO_PKG_VERSION"), "]")
+        concat!("Kiwi ", env!("CARGO_PKG_VERSION"))
     }
 
     fn uptime(&self) -> core::time::Duration {
