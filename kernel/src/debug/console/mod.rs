@@ -34,7 +34,7 @@ mod system;
 /// The period of the ticks of the console: the panels are animated at this
 /// period, and the system information is refreshed less often (see
 /// [`console::console::REFRESH_PERIOD`]).
-const TICK_PERIOD: Duration = Duration::from_millis(50);
+const TICK_PERIOD: Duration = Duration::from_millis(100);
 
 /// Starts the debug console on the framebuffer, as a task of the executor of
 /// the current CPU. If there is no usable framebuffer, the console is not

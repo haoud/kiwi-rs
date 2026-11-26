@@ -13,7 +13,7 @@ use ratatui::{
     Frame, Terminal,
     backend::Backend,
     buffer::Buffer,
-    layout::{Constraint, Layout, Margin, Rect},
+    layout::{Margin, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{
@@ -27,7 +27,7 @@ use crate::{
     editor::{History, LineEditor},
     format::Uptime,
     input::{Input, Key, KeyEvent, Ticker},
-    panel::{CpuPanel, MemoryPanel, Panel},
+    panel::{CpuPanel, FILL, MemoryPanel, Panel, split_columns, split_rows},
     scrollback::{Scrollback, StyledChar},
     system::{Monitor, System},
     theme,
@@ -71,17 +71,10 @@ struct Areas {
 
 impl Areas {
     fn new(area: Rect) -> Self {
-        let [header, body, footer] = Layout::vertical([
-            Constraint::Length(1),
-            Constraint::Fill(1),
-            Constraint::Length(1),
-        ])
-        .areas(area);
+        let [header, body, footer] = split_rows(area, [1, area.height.saturating_sub(2), 1]);
 
         if area.width >= SIDEBAR_MIN_SCREEN_WIDTH {
-            let [shell, sidebar] =
-                Layout::horizontal([Constraint::Fill(1), Constraint::Length(SIDEBAR_WIDTH)])
-                    .areas(body);
+            let [shell, sidebar] = split_columns(body, [FILL, SIDEBAR_WIDTH]);
             Self {
                 header,
                 shell,

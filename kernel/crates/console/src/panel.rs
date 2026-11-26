@@ -7,7 +7,7 @@ use alloc::{format, vec::Vec};
 
 use ratatui::{
     buffer::Buffer,
-    layout::{Constraint, Layout, Rect},
+    layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, LineGauge, RenderDirection, Sparkline, Widget},
@@ -42,6 +42,50 @@ pub trait Panel: Send {
     /// Called at every tick of the console with the time elapsed since the
     /// boot, to animate the panel.
     fn update(&mut self, _uptime: core::time::Duration) {}
+}
+
+/// A height for [`split_rows`] meaning "all the remaining rows".
+pub const FILL: u16 = u16::MAX;
+
+/// Splits an area into rows of the given heights, from top to bottom. A
+/// height of [`FILL`] takes all the rows left, and the rows that do not fit
+/// in the area are empty.
+///
+/// This is used instead of Ratatui's `Layout`, whose constraint solver is
+/// overkill for stacking fixed heights and expensive without a floating point
+/// unit (the kernel is compiled with soft-float).
+#[must_use]
+pub fn split_rows<const N: usize>(area: Rect, heights: [u16; N]) -> [Rect; N] {
+    let mut y = area.top();
+    heights.map(|height| {
+        let height = height.min(area.bottom() - y);
+        let row = Rect::new(area.x, y, area.width, height);
+        y += height;
+        row
+    })
+}
+
+/// Splits an area into columns of the given widths, from left to right. A
+/// width of [`FILL`] takes all the columns left minus the fixed widths of the
+/// following columns.
+#[must_use]
+pub fn split_columns<const N: usize>(area: Rect, widths: [u16; N]) -> [Rect; N] {
+    let fixed: u16 = widths
+        .iter()
+        .filter(|&&w| w != FILL)
+        .fold(0, |a, &w| a.saturating_add(w));
+    let mut x = area.left();
+    widths.map(|width| {
+        let width = if width == FILL {
+            area.width.saturating_sub(fixed)
+        } else {
+            width
+        }
+        .min(area.right() - x);
+        let column = Rect::new(x, area.y, width, area.height);
+        x += width;
+        column
+    })
 }
 
 /// The height of the sparklines, in rows.
@@ -108,13 +152,7 @@ impl Panel for CpuPanel {
 
     fn render(&self, stats: &Stats, area: Rect, buf: &mut Buffer) {
         let load = stats.total_load();
-        let [summary, history, _, cpus] = Layout::vertical([
-            Constraint::Length(1),
-            Constraint::Length(SPARKLINE_HEIGHT),
-            Constraint::Length(1),
-            Constraint::Fill(1),
-        ])
-        .areas(area);
+        let [summary, history, _, cpus] = split_rows(area, [1, SPARKLINE_HEIGHT, 1, FILL]);
 
         let value = Line::from(vec_spans([
             Span::styled(
@@ -149,8 +187,7 @@ pub struct MemoryPanel;
 
 impl MemoryPanel {
     fn render_pool(name: &str, usage: MemoryUsage, area: Rect, buf: &mut Buffer) {
-        let [details, gauge] =
-            Layout::vertical([Constraint::Length(1), Constraint::Length(1)]).areas(area);
+        let [details, gauge] = split_rows(area, [1, 1]);
         let value = Line::from(vec_spans([
             Span::styled(
                 format!("{}", Bytes(usage.used)),
@@ -179,14 +216,7 @@ impl Panel for MemoryPanel {
     }
 
     fn render(&self, stats: &Stats, area: Rect, buf: &mut Buffer) {
-        let [physical, _, heap, _, history] = Layout::vertical([
-            Constraint::Length(2),
-            Constraint::Length(1),
-            Constraint::Length(2),
-            Constraint::Length(1),
-            Constraint::Length(2),
-        ])
-        .areas(area);
+        let [physical, _, heap, _, history] = split_rows(area, [2, 1, 2, 1, 2]);
 
         Self::render_pool("physical", stats.memory, physical, buf);
         Self::render_pool("kernel heap", stats.heap, heap, buf);
@@ -217,7 +247,7 @@ pub struct HexDumpPanel {
 
 impl HexDumpPanel {
     /// The time between two lines of the dump.
-    pub const LINE_PERIOD: core::time::Duration = core::time::Duration::from_millis(50);
+    pub const LINE_PERIOD: core::time::Duration = core::time::Duration::from_millis(100);
 
     /// The width of the address column, followed by a space.
     const ADDRESS_WIDTH: u16 = 9;
