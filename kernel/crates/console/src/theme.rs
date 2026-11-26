@@ -1,42 +1,42 @@
-//! The colors of the console: a dark theme inspired by the Catppuccin Mocha
-//! palette, using 24-bit colors.
+//! The colors of the console: a dark theme based on the Gruvbox Dark palette,
+//! using 24-bit colors.
 use ratatui::style::{Color, Modifier, Style};
 
 /// The background of the whole screen.
-pub const BACKGROUND: Color = Color::Rgb(0x1E, 0x1E, 0x2E);
+pub const BACKGROUND: Color = Color::Rgb(0x28, 0x28, 0x28);
 
 /// A slightly darker background, used for the header and the footer.
-pub const BACKGROUND_DARK: Color = Color::Rgb(0x18, 0x18, 0x25);
+pub const BACKGROUND_DARK: Color = Color::Rgb(0x1D, 0x20, 0x21);
 
 /// The background of highlighted elements.
-pub const SURFACE: Color = Color::Rgb(0x31, 0x32, 0x44);
+pub const SURFACE: Color = Color::Rgb(0x3C, 0x38, 0x36);
 
 /// The borders of the panels.
-pub const BORDER: Color = Color::Rgb(0x45, 0x47, 0x5A);
+pub const BORDER: Color = Color::Rgb(0x50, 0x49, 0x45);
 
 /// Regular text.
-pub const TEXT: Color = Color::Rgb(0xCD, 0xD6, 0xF4);
+pub const TEXT: Color = Color::Rgb(0xEB, 0xDB, 0xB2);
 
 /// Secondary text (labels, hints...).
-pub const MUTED: Color = Color::Rgb(0x7F, 0x84, 0x9C);
+pub const MUTED: Color = Color::Rgb(0x92, 0x83, 0x74);
 
 /// The main accent color (titles, prompt...).
-pub const ACCENT: Color = Color::Rgb(0xCB, 0xA6, 0xF7);
+pub const ACCENT: Color = Color::Rgb(0xFE, 0x80, 0x19);
 
 /// Informative elements (names, values...).
-pub const INFO: Color = Color::Rgb(0x89, 0xB4, 0xFA);
+pub const INFO: Color = Color::Rgb(0x83, 0xA5, 0x98);
 
 /// Secondary informative elements.
-pub const TEAL: Color = Color::Rgb(0x94, 0xE2, 0xD5);
+pub const TEAL: Color = Color::Rgb(0x8E, 0xC0, 0x7C);
 
 /// Success and low usage.
-pub const SUCCESS: Color = Color::Rgb(0xA6, 0xE3, 0xA1);
+pub const SUCCESS: Color = Color::Rgb(0xB8, 0xBB, 0x26);
 
 /// Warnings and high usage.
-pub const WARNING: Color = Color::Rgb(0xF9, 0xE2, 0xAF);
+pub const WARNING: Color = Color::Rgb(0xFA, 0xBD, 0x2F);
 
 /// Errors and critical usage.
-pub const ERROR: Color = Color::Rgb(0xF3, 0x8B, 0xA8);
+pub const ERROR: Color = Color::Rgb(0xFB, 0x49, 0x34);
 
 /// Returns the color used to display a load or usage ratio, expressed in
 /// per mille: green when low, yellow when high, and red when critical.
