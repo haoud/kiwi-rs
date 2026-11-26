@@ -4,6 +4,7 @@ use macros::init;
 
 use crate::{
     arch::x86_64::{self, cpu::InterruptFrame, gdt},
+    driver,
     library::lock::spin::Spinlock,
 };
 
@@ -163,6 +164,10 @@ pub unsafe extern "C" fn trap_handler(frame: &mut InterruptFrame) {
     match vector {
         32 => {
             x86_64::apic::local::timer::handle_irq();
+        }
+        driver::keyboard::ps2::IRQ_VECTOR => {
+            driver::keyboard::ps2::handle_irq();
+            x86_64::apic::local::signal_eoi();
         }
         _ => {
             log::warn!("Unknown interrupt: {}", vector);

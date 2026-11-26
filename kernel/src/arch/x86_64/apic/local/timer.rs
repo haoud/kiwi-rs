@@ -10,6 +10,7 @@ use crate::{
     },
     config,
     library::lock::seq::Seqlock,
+    scheduler,
     time::{self, TimerFrequency, duration::Duration},
 };
 
@@ -120,5 +121,6 @@ pub fn handle_irq() {
     if arch::smp::is_bsp() {
         time::jiffies::increment_jiffies();
     }
+    scheduler::load::account_tick();
     time::timer::handle_expired_timers();
 }

@@ -2,6 +2,7 @@ pub mod addr;
 pub mod boot;
 pub mod cpu;
 pub mod frame;
+pub mod framebuffer;
 pub mod irq;
 pub mod log;
 pub mod mem;

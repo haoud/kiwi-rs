@@ -73,3 +73,23 @@ pub unsafe fn setup() {
         .lock()
         .init(heap.as_mut_ptr::<u8>(), HEAP_ORDER.size());
 }
+
+/// The usage of the kernel heap, in bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct HeapStatistics {
+    /// The size of the heap.
+    pub size: usize,
+
+    /// The number of bytes currently allocated.
+    pub used: usize,
+}
+
+/// Returns the usage of the kernel heap.
+#[must_use]
+pub fn statistics() -> HeapStatistics {
+    let heap = ALLOCATOR.lock_irq_safe();
+    HeapStatistics {
+        size: heap.size(),
+        used: heap.used(),
+    }
+}
