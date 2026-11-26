@@ -10,12 +10,14 @@
 //!   key presses, using the current keyboard layout;
 //! - [`input::Interval`] wakes up the console periodically with a timer;
 //! - [`system::KernelSystem`] collects the memory and CPU statistics;
-//! - [`commands`] adds the commands that only make sense in the kernel.
+//! - [`commands`] adds the commands that only make sense in the kernel;
+//! - [`memory`] provides the memory displayed by the memory dump panel.
 //!
 //! The console runs as an asynchronous task on the executor of the CPU that
 //! started it: it sleeps until a key is pressed or its refresh period elapses,
 //! so it does not need a dedicated thread and costs nothing when idle.
-use console::Console;
+use alloc::boxed::Box;
+use console::{Console, panel::HexDumpPanel};
 
 use crate::{
     future,
@@ -26,11 +28,13 @@ use crate::{
 mod backend;
 mod commands;
 mod input;
+mod memory;
 mod system;
 
-/// The period at which the system information is refreshed and the cursor
-/// blinks.
-const REFRESH_PERIOD: Duration = Duration::from_millis(500);
+/// The period of the ticks of the console: the panels are animated at this
+/// period, and the system information is refreshed less often (see
+/// [`console::console::REFRESH_PERIOD`]).
+const TICK_PERIOD: Duration = Duration::from_millis(50);
 
 /// Starts the debug console on the framebuffer, as a task of the executor of
 /// the current CPU. If there is no usable framebuffer, the console is not
@@ -49,10 +53,14 @@ pub fn start() {
     let (width, height) = (size.width, size.height);
     let mut console = Console::new(system::KernelSystem, width, height);
     commands::register(&mut console);
+    let rodata = memory::kernel_rodata();
+    console.add_panel(Box::new(
+        HexDumpPanel::new("Memory dump · .rodata", rodata).starting_at(memory::first_text(rodata)),
+    ));
 
     log::info!("Debug console started ({width}x{height} cells)");
     let keyboard = input::KeyboardInput::new();
-    let ticker = input::Interval::new(REFRESH_PERIOD);
+    let ticker = input::Interval::new(TICK_PERIOD);
     future::spawn(async move {
         console.run(backend, keyboard, ticker).await;
     });

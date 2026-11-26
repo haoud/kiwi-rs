@@ -48,6 +48,10 @@ const HISTORY_CAPACITY: usize = 64;
 /// The number of output lines that can be scrolled back.
 const SCROLLBACK_CAPACITY: usize = 512;
 
+/// The period at which the information about the system is refreshed and the
+/// cursor blinks.
+pub const REFRESH_PERIOD: core::time::Duration = core::time::Duration::from_millis(500);
+
 /// The maximum number of key presses processed before redrawing the screen.
 const MAX_KEYS_PER_FRAME: usize = 32;
 
@@ -120,6 +124,9 @@ pub struct Console<S> {
 
     /// Whether the blinking cursor is currently visible.
     cursor_visible: bool,
+
+    /// The uptime at the last refresh of the information about the system.
+    last_refresh: core::time::Duration,
 }
 
 impl<S: System> Console<S> {
@@ -142,6 +149,7 @@ impl<S: System> Console<S> {
             monitor: Monitor::new(),
             scroll: 0,
             cursor_visible: true,
+            last_refresh: core::time::Duration::ZERO,
             system,
         };
         console.add_panel(Box::new(CpuPanel));
@@ -220,10 +228,23 @@ impl<S: System> Console<S> {
         }
     }
 
-    /// Refreshes the information about the system and blinks the cursor.
+    /// Animates the panels, refreshes the information about the system and
+    /// blinks the cursor.
+    ///
+    /// The ticks can be more frequent than the refresh period, to animate the
+    /// panels: the panels are updated at every tick, but the information about
+    /// the system is only refreshed once per [`REFRESH_PERIOD`].
     pub fn tick(&mut self) {
-        self.monitor.refresh(&self.system);
-        self.cursor_visible = !self.cursor_visible;
+        let uptime = self.system.uptime();
+        for panel in &mut self.panels {
+            panel.update(uptime);
+        }
+
+        if uptime.saturating_sub(self.last_refresh) >= REFRESH_PERIOD {
+            self.last_refresh = uptime;
+            self.monitor.refresh(&self.system);
+            self.cursor_visible = !self.cursor_visible;
+        }
     }
 
     /// Handles a key press.
@@ -536,7 +557,11 @@ impl<S: System> Console<S> {
         let mut y = area.y;
         for panel in &self.panels {
             let inner_width = area.width.saturating_sub(4);
-            let height = panel.height(stats, inner_width) + 2;
+            let height = if panel.is_flexible() {
+                area.bottom().saturating_sub(y)
+            } else {
+                panel.height(stats, inner_width) + 2
+            };
             let rect = Rect::new(area.x, y, area.width, height).intersection(area);
             if rect.height < 3 {
                 break;

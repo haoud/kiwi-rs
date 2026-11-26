@@ -47,7 +47,9 @@ SECTIONS
 
     .rodata : ALIGN(4K)
     {
+        __rodata_start = .;
         *(.rodata*)
+        __rodata_end = .;
     }
 
     .bss (NOLOAD) : ALIGN(4K)
