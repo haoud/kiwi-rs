@@ -111,10 +111,14 @@ fn read_current_count() -> u32 {
 }
 
 /// Handle a Local APIC timer interrupt.
+///
+/// Only the BSP increments the jiffies, but each CPU handles its own expired
+/// timers, so that the callback of a timer is executed on the CPU that
+/// registered it.
 pub fn handle_irq() {
     apic::local::signal_eoi();
     if arch::smp::is_bsp() {
         time::jiffies::increment_jiffies();
-        time::timer::handle_expired_timers();
     }
+    time::timer::handle_expired_timers();
 }

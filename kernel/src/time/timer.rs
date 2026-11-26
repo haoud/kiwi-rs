@@ -1,7 +1,7 @@
 use core::sync::atomic::{AtomicBool, Ordering};
 
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
-use macros::init;
+use macros::{init, per_cpu};
 
 use crate::{
     library::lock::spin::Spinlock,
@@ -12,9 +12,11 @@ use crate::{
 /// reference to the timer that is being executed, allowing the callback to
 /// modify the timer's state (e.g. rearm it with a new deadline) if needed.
 ///
-/// The `Send` bound is required to allow the callback to be executed in an
-/// interrupt context, which may be on a different thread than the one that
-/// registered the timer.
+/// The callback is always executed in the interrupt context of the CPU that
+/// registered the timer. The `Send` bound is still required because the timer
+/// may be registered from a thread, which can migrate to another CPU, and the
+/// callback is executed in an interrupt context that is unrelated to the thread
+/// that registered it.
 pub type TimerCallback = Box<dyn FnMut(&mut Timer) + Send>;
 
 /// The mode of a timer, which determines whether it is a one-shot timer or a
@@ -222,6 +224,11 @@ impl Drop for TimerGuard {
 
 /// The timer manager is responsible for managing the active timers and
 /// executing their callbacks when they expire.
+///
+/// Each CPU has its own timer manager, and a timer is always executed by the
+/// manager of the CPU that registered it. The spinlock is therefore never
+/// contended: it is only used to protect the list of timers against an
+/// interrupt that would occur on the same CPU while the list is modified.
 pub struct TimerManager {
     /// A list of active timers, protected by a spinlock to allow concurrent
     /// access. The timers in this list are not sorted, since I don't expect
@@ -292,8 +299,16 @@ impl Default for TimerManager {
     }
 }
 
-/// The global timer manager instance that will be used to manage all timers in
-/// the kernel.
+/// The timer manager of the current CPU. Each CPU handles its own timers in its
+/// own timer interrupt, so the callback of a timer is always executed on the
+/// CPU that registered it. This is required for callbacks that act on per-CPU
+/// state (e.g. requesting a reschedule of the current task or spawning a future
+/// on the executor of the current CPU), and also spreads the cost of handling
+/// timers across all CPUs instead of putting everything on the BSP.
+///
+/// The cancellation of a timer is still possible from any CPU, since the guard
+/// of a timer only shares an atomic boolean with it.
+#[per_cpu]
 static TIMER_MANAGER: TimerManager = TimerManager::new();
 
 /// Initializes the timer subsystem.
@@ -309,12 +324,13 @@ pub unsafe fn setup() {
     // the main function.
 }
 
-/// Registers a new timer with the global timer manager.
+/// Registers a new timer with the timer manager of the current CPU: its
+/// callback will be executed on this CPU when the timer expires.
 ///
 /// See [`TimerManager::register_timer`] for more details since this function
 /// is just a wrapper around it.
 pub fn register(timer: Timer) -> TimerGuard {
-    TIMER_MANAGER.register_timer(timer)
+    TIMER_MANAGER.local().register_timer(timer)
 }
 
 /// Schedules a new timer to execute the given callback at the specified
@@ -371,13 +387,13 @@ where
     ))
 }
 
-/// Handles expired timers by executing their callbacks and removing them from
-/// the active timers list. Also removes timers that have been cancelled by
-/// dropping their guards.
+/// Handles the expired timers of the current CPU by executing their callbacks
+/// and removing them from the active timers list. Also removes timers that
+/// have been cancelled by dropping their guards.
 ///
 /// This function should be called periodically by the architecture-specific
-/// timer interrupt handler to ensure that expired timers are executed in a
-/// timely manner.
+/// timer interrupt handler of each CPU to ensure that expired timers are
+/// executed in a timely manner.
 pub fn handle_expired_timers() {
-    TIMER_MANAGER.handle_expired_timers();
+    TIMER_MANAGER.local().handle_expired_timers();
 }
