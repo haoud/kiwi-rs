@@ -56,7 +56,7 @@ impl Layout {
 }
 
 /// The layout used by the keyboard consumers.
-static CURRENT: AtomicU8 = AtomicU8::new(Layout::Fr as u8);
+static CURRENT: AtomicU8 = AtomicU8::new(Layout::Us as u8);
 
 /// Returns the current keyboard layout.
 #[must_use]
