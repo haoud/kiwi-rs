@@ -11,6 +11,7 @@ use crate::{
     time::{duration::Duration, instant::Instant},
 };
 
+pub mod load;
 pub mod policy;
 pub mod task;
 
@@ -205,6 +206,23 @@ where
         .task_runnable(task);
 }
 
+/// Returns the number of tasks that currently exist in the system.
+#[must_use]
+pub fn task_count() -> usize {
+    TASKS.lock().len()
+}
+
+/// Returns the identifier and the state of every task that currently exists
+/// in the system.
+#[must_use]
+pub fn tasks() -> Vec<(usize, TaskState)> {
+    TASKS
+        .lock()
+        .iter()
+        .map(|task| (usize::from(task.id().clone()), *task.state().lock()))
+        .collect()
+}
+
 /// Changes the state of the current task to the given state. Be careful
 /// when using this function, as changing the state of the current task can
 /// lead to unexpected behavior if not done correctly...
@@ -253,7 +271,7 @@ pub fn need_reschedule() -> bool {
 pub fn schedule() {
     assert!(arch::irq::enabled() == State::Enabled);
     set_need_reschedule(true);
-    arch::irq::wait();
+    load::idle_wait();
 }
 
 /// Returns the next runnable task from the scheduler policy. If there are no
@@ -287,7 +305,7 @@ pub fn get_runnable_task() -> Arc<Task> {
         // is meaningless and is ignored.
         let _ = future::executor::run();
         if !future::executor::has_ready_tasks() {
-            arch::irq::wait();
+            load::idle_wait();
         }
     }
 }

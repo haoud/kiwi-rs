@@ -15,6 +15,14 @@ build-user:
 run: build-user
 	cd kernel && cargo run --release
 
+# Build the kernel with the debug console
+build-debug: build-user
+	cd kernel && cargo build --release --features debug-console
+
+# Run the kernel with the debug console
+run-debug: build-user
+	cd kernel && cargo run --release --features debug-console
+
 # Clean the intermediate build files
 clean:
 	cd kernel && cargo clean

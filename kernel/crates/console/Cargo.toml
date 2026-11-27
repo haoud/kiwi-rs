@@ -1,0 +1,14 @@
+[package]
+name = "console"
+version = "0.1.0"
+edition = "2024"
+
+# This crate must stay independent from the kernel: it only depends on `core`
+# and `alloc`, and interacts with the system through the traits defined in
+# `system`, `input` and `screen`. This allows to reuse it unchanged once it is
+# ported to userspace.
+[dependencies]
+ratatui = { version = "0.30", default-features = false }
+
+[lints]
+workspace = true
