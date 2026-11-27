@@ -9,36 +9,70 @@ static REGULAR_FONT: &[u8] = include_bytes!("../../assets/fonts/terminus16.psf")
 /// The bold variant of the embedded font.
 static BOLD_FONT: &[u8] = include_bytes!("../../assets/fonts/terminus16-bold.psf");
 
-/// The magic number at the start of a PSF1 font.
-const PSF1_MAGIC: [u8; 2] = [0x36, 0x04];
+/// The constants of the PSF1 format.
+mod psf1 {
+    use bitflags::bitflags;
 
-/// The PSF1 font has 512 glyphs instead of 256.
-const PSF1_MODE_512: u8 = 0x01;
+    /// The magic number at the start of a PSF1 font.
+    pub const MAGIC: [u8; 2] = [0x36, 0x04];
 
-/// The PSF1 font has a Unicode table after its glyphs.
-const PSF1_MODE_HAS_TABLE: u8 = 0x02;
+    /// Ends the list of characters of a glyph in the Unicode table.
+    pub const SEPARATOR: u16 = 0xFFFF;
 
-/// The Unicode table of the PSF1 font may contain sequences of characters
-/// (this also implies that the font has a Unicode table).
-const PSF1_MODE_HAS_SEQUENCES: u8 = 0x04;
+    /// Starts a sequence of characters in the Unicode table.
+    pub const START_SEQUENCE: u16 = 0xFFFE;
 
-/// Ends the list of characters of a glyph in a PSF1 Unicode table.
-const PSF1_SEPARATOR: u16 = 0xFFFF;
+    bitflags! {
+        /// The mode byte of the header of a PSF1 font.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        pub struct Mode: u8 {
+            /// The font has 512 glyphs instead of 256.
+            const GLYPHS_512 = 1 << 0;
 
-/// Starts a sequence of characters in a PSF1 Unicode table.
-const PSF1_START_SEQUENCE: u16 = 0xFFFE;
+            /// The font has a Unicode table after its glyphs.
+            const HAS_TABLE = 1 << 1;
 
-/// The magic number at the start of a PSF2 font.
-const PSF2_MAGIC: [u8; 4] = [0x72, 0xB5, 0x4A, 0x86];
+            /// The Unicode table may contain sequences of characters (this
+            /// also implies that the font has a Unicode table).
+            const HAS_SEQUENCES = 1 << 2;
+        }
+    }
+}
 
-/// The PSF2 font has a Unicode table after its glyphs.
-const PSF2_HAS_UNICODE_TABLE: u32 = 0x01;
+/// The constants of the PSF2 format.
+mod psf2 {
+    use bitflags::bitflags;
 
-/// Ends the list of characters of a glyph in a PSF2 Unicode table.
-const PSF2_SEPARATOR: u8 = 0xFF;
+    /// The magic number at the start of a PSF2 font.
+    pub const MAGIC: [u8; 4] = [0x72, 0xB5, 0x4A, 0x86];
 
-/// Starts a sequence of characters in a PSF2 Unicode table.
-const PSF2_START_SEQUENCE: u8 = 0xFE;
+    /// Ends the list of characters of a glyph in the Unicode table.
+    pub const SEPARATOR: u8 = 0xFF;
+
+    /// Starts a sequence of characters in the Unicode table.
+    pub const START_SEQUENCE: u8 = 0xFE;
+
+    bitflags! {
+        /// The flags of the header of a PSF2 font.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        pub struct Flags: u32 {
+            /// The font has a Unicode table after its glyphs.
+            const HAS_UNICODE_TABLE = 1 << 0;
+        }
+    }
+}
+
+bitflags::bitflags! {
+    /// The quadrants of a character cell, used to synthesize the quadrant
+    /// block elements (U+2596 to U+259F).
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    struct Quadrants: u8 {
+        const UPPER_LEFT = 1 << 0;
+        const UPPER_RIGHT = 1 << 1;
+        const LOWER_LEFT = 1 << 2;
+        const LOWER_RIGHT = 1 << 3;
+    }
+}
 
 /// The reasons why a font cannot be parsed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -161,9 +195,9 @@ impl Font {
     /// # Errors
     /// Returns an error if the data is not a valid PSF font.
     pub fn parse(data: &'static [u8]) -> Result<Self, Error> {
-        if data.starts_with(&PSF2_MAGIC) {
+        if data.starts_with(&psf2::MAGIC) {
             Self::parse_psf2(data)
-        } else if data.starts_with(&PSF1_MAGIC) {
+        } else if data.starts_with(&psf1::MAGIC) {
             Self::parse_psf1(data)
         } else {
             Err(Error::BadMagic)
@@ -175,12 +209,16 @@ impl Font {
     /// Unicode table listing the characters of each glyph as UTF-16 code
     /// units.
     fn parse_psf1(data: &'static [u8]) -> Result<Self, Error> {
-        let mode = *data.get(2).ok_or(Error::Truncated)?;
+        let mode = psf1::Mode::from_bits_retain(*data.get(2).ok_or(Error::Truncated)?);
         let height = usize::from(*data.get(3).ok_or(Error::Truncated)?);
-        let count = if mode & PSF1_MODE_512 != 0 { 512 } else { 256 };
+        let count = if mode.contains(psf1::Mode::GLYPHS_512) {
+            512
+        } else {
+            256
+        };
 
         let mut font = Self::new(data, 4, count, 8, height)?;
-        if mode & (PSF1_MODE_HAS_TABLE | PSF1_MODE_HAS_SEQUENCES) != 0 {
+        if mode.intersects(psf1::Mode::HAS_TABLE | psf1::Mode::HAS_SEQUENCES) {
             let table = &data[4 + count * font.bytes_per_glyph..];
             let mut entries = table
                 .chunks_exact(2)
@@ -194,8 +232,8 @@ impl Font {
                 let mut in_sequence = false;
                 for entry in entries.by_ref() {
                     match entry {
-                        PSF1_SEPARATOR => break,
-                        PSF1_START_SEQUENCE => in_sequence = true,
+                        psf1::SEPARATOR => break,
+                        psf1::START_SEQUENCE => in_sequence = true,
                         _ if in_sequence => {}
                         code => {
                             if let Some(ch) = char::from_u32(u32::from(code)) {
@@ -223,7 +261,7 @@ impl Font {
         };
         let to_usize = |value: u32| usize::try_from(value).map_err(|_| Error::InvalidHeader);
         let header_size = to_usize(field(2)?)?;
-        let flags = field(3)?;
+        let flags = psf2::Flags::from_bits_retain(field(3)?);
         let count = to_usize(field(4)?)?;
         let bytes_per_glyph = to_usize(field(5)?)?;
         let height = to_usize(field(6)?)?;
@@ -234,19 +272,19 @@ impl Font {
             return Err(Error::InvalidHeader);
         }
 
-        if flags & PSF2_HAS_UNICODE_TABLE != 0 {
+        if flags.contains(psf2::Flags::HAS_UNICODE_TABLE) {
             let mut table = &data[header_size + count * bytes_per_glyph..];
             for glyph in 0..count {
                 // Each glyph has a list of UTF-8 characters, followed by an
                 // optional list of sequences, and ends with a separator.
                 let end = table
                     .iter()
-                    .position(|&b| b == PSF2_SEPARATOR)
+                    .position(|&b| b == psf2::SEPARATOR)
                     .unwrap_or(table.len());
                 let entry = &table[..end];
                 let singles = entry
                     .iter()
-                    .position(|&b| b == PSF2_START_SEQUENCE)
+                    .position(|&b| b == psf2::START_SEQUENCE)
                     .map_or(entry, |start| &entry[..start]);
 
                 if let Ok(chars) = core::str::from_utf8(singles) {
@@ -444,18 +482,16 @@ fn synthetic_pixel(ch: char, width: usize, height: usize) -> Option<impl Fn(usiz
     let rect = move |x: usize, y: usize, (x0, y0, x1, y1): (usize, usize, usize, usize)| {
         x * 8 >= x0 * w && x * 8 < x1 * w && y * 8 >= y0 * h && y * 8 < y1 * h
     };
-    // Quadrants of the cell: upper left, upper right, lower left, lower right.
-    let quadrants = |mask: u8| {
+    // The pixel is set if it is inside one of the given quadrants.
+    let quadrants = |set: Quadrants| {
         move |x: usize, y: usize| {
-            let right = x * 2 >= w;
-            let lower = y * 2 >= h;
-            let bit = match (lower, right) {
-                (false, false) => 1,
-                (false, true) => 2,
-                (true, false) => 4,
-                (true, true) => 8,
+            let quadrant = match (y * 2 >= h, x * 2 >= w) {
+                (false, false) => Quadrants::UPPER_LEFT,
+                (false, true) => Quadrants::UPPER_RIGHT,
+                (true, false) => Quadrants::LOWER_LEFT,
+                (true, true) => Quadrants::LOWER_RIGHT,
             };
-            mask & bit != 0
+            set.contains(quadrant)
         }
     };
 
@@ -488,19 +524,23 @@ fn synthetic_pixel(ch: char, width: usize, height: usize) -> Option<impl Fn(usiz
         0x2595 => alloc::boxed::Box::new(move |x, y| rect(x, y, (7, 0, 8, 8))),
         0x2596..=0x259F => {
             // The quadrants set for each character, from U+2596 to U+259F.
-            const MASKS: [u8; 10] = [
-                4,
-                8,
-                1,
-                1 | 4 | 8,
-                1 | 8,
-                1 | 2 | 4,
-                1 | 2 | 8,
-                2,
-                2 | 4,
-                2 | 4 | 8,
+            const UL: Quadrants = Quadrants::UPPER_LEFT;
+            const UR: Quadrants = Quadrants::UPPER_RIGHT;
+            const LL: Quadrants = Quadrants::LOWER_LEFT;
+            const LR: Quadrants = Quadrants::LOWER_RIGHT;
+            const CHARACTERS: [Quadrants; 10] = [
+                LL,
+                LR,
+                UL,
+                UL.union(LL).union(LR),
+                UL.union(LR),
+                UL.union(UR).union(LL),
+                UL.union(UR).union(LR),
+                UR,
+                UR.union(LL),
+                UR.union(LL).union(LR),
             ];
-            alloc::boxed::Box::new(quadrants(MASKS[(code - 0x2596) as usize]))
+            alloc::boxed::Box::new(quadrants(CHARACTERS[(code - 0x2596) as usize]))
         }
         // Braille patterns: 2 columns of 4 dots, numbered from top to bottom
         // in the left column (1, 2, 3, 7) then in the right one (4, 5, 6, 8).
