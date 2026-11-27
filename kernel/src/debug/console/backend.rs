@@ -46,10 +46,20 @@ const ANSI: [Rgb; 16] = [
 pub struct FramebufferBackend {
     framebuffer: Framebuffer,
     regular: Font,
+
+    /// The font used for bold text, with glyphs of the same size as the
+    /// regular font.
     bold: Font,
+
+    /// The size of the grid of cells.
     columns: u16,
     rows: u16,
+
+    /// The position in pixels of the top left corner of the grid.
     origin: (usize, usize),
+
+    /// The position of the terminal cursor. It is only remembered for
+    /// Ratatui, since the backend does not draw it.
     cursor: Position,
 }
 
@@ -88,6 +98,9 @@ impl FramebufferBackend {
         )
     }
 
+    /// Draws a cell: its symbol with the font matching its style, with its
+    /// colors and modifiers. Only the first character of the symbol is drawn,
+    /// since the fonts do not support combining characters.
     fn draw_cell(&mut self, x: u16, y: u16, cell: &Cell) {
         if x >= self.columns || y >= self.rows {
             return;
@@ -138,6 +151,7 @@ impl FramebufferBackend {
 impl Backend for FramebufferBackend {
     type Error = Infallible;
 
+    /// Draws the cells that changed since the previous frame.
     fn draw<'a, I>(&mut self, content: I) -> Result<(), Self::Error>
     where
         I: Iterator<Item = (u16, u16, &'a Cell)>,
@@ -148,18 +162,22 @@ impl Backend for FramebufferBackend {
         Ok(())
     }
 
+    /// Does nothing: the backend never draws the cursor.
     fn hide_cursor(&mut self) -> Result<(), Self::Error> {
         Ok(())
     }
 
+    /// Does nothing: the backend never draws the cursor.
     fn show_cursor(&mut self) -> Result<(), Self::Error> {
         Ok(())
     }
 
+    /// Returns the last position given to [`Self::set_cursor_position`].
     fn get_cursor_position(&mut self) -> Result<Position, Self::Error> {
         Ok(self.cursor)
     }
 
+    /// Remembers the position of the cursor, used by [`Self::clear_region`].
     fn set_cursor_position<P: Into<Position>>(&mut self, position: P) -> Result<(), Self::Error> {
         self.cursor = position.into();
         Ok(())
@@ -170,6 +188,8 @@ impl Backend for FramebufferBackend {
         Ok(())
     }
 
+    /// Fills a part of the grid with the default background color, relatively
+    /// to the position of the cursor.
     fn clear_region(&mut self, clear_type: ClearType) -> Result<(), Self::Error> {
         let Position { x, y } = self.cursor;
         let (columns, rows) = (self.columns, self.rows);
@@ -204,6 +224,7 @@ impl Backend for FramebufferBackend {
         })
     }
 
+    /// Does nothing: the cells are drawn directly on the framebuffer.
     fn flush(&mut self) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -239,6 +260,7 @@ fn rgb(color: Color, default: Rgb) -> Rgb {
 /// Converts a color of the xterm 256 colors palette: the 16 ANSI colors, a
 /// 6x6x6 color cube, and 24 shades of gray.
 fn indexed(index: u8) -> Rgb {
+    // The levels of each component in the color cube.
     const LEVELS: [u8; 6] = [0x00, 0x5F, 0x87, 0xAF, 0xD7, 0xFF];
     match index {
         0..=15 => ANSI[usize::from(index)],

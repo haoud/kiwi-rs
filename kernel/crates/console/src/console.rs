@@ -64,12 +64,20 @@ const SIDEBAR_MIN_SCREEN_WIDTH: u16 = 100;
 /// The areas of the screen.
 struct Areas {
     header: Rect,
+
+    /// The shell, with its border.
     shell: Rect,
+
+    /// The sidebar on the right of the shell, or `None` if the screen is too
+    /// narrow to display it.
     sidebar: Option<Rect>,
     footer: Rect,
 }
 
 impl Areas {
+    /// Computes the areas of a screen of the given size. The sidebar has a
+    /// fixed width and the shell takes all the remaining width, or the whole
+    /// width if the screen is narrower than [`SIDEBAR_MIN_SCREEN_WIDTH`].
     fn new(area: Rect) -> Self {
         let [header, body, footer] = split_rows(area, [1, area.height.saturating_sub(2), 1]);
 
@@ -102,14 +110,24 @@ impl Areas {
 /// A modern text user interface console, generic over the system it displays
 /// information about.
 pub struct Console<S> {
+    /// The system the console displays information about.
     system: S,
+
+    /// The size of the screen, in cells.
     area: Rect,
 
+    /// The output of the commands, displayed in the shell.
     output: Scrollback,
+
     editor: LineEditor,
     history: History,
     commands: Registry,
+
+    /// The panels of the sidebar, from top to bottom.
     panels: Vec<Box<dyn Panel>>,
+
+    /// Samples the system periodically to compute the statistics displayed
+    /// by the panels.
     monitor: Monitor,
 
     /// The number of rows the shell is scrolled back by.
@@ -259,6 +277,8 @@ impl<S: System> Console<S> {
             return;
         }
 
+        // Scrolling by a page keeps one row of the previous page visible, to
+        // help the user to follow the output.
         let page = usize::from(
             Areas::new(self.area)
                 .shell_content()
@@ -314,6 +334,7 @@ impl<S: System> Console<S> {
         self.output.put_char('\n');
         self.history.push(line);
 
+        // An empty line does nothing, like in any shell.
         let words = command::split(line);
         let Some((name, args)) = words.split_first() else {
             return;
@@ -355,8 +376,13 @@ impl<S: System> Console<S> {
         }
     }
 
-    /// Completes the name of the command being typed.
+    /// Completes the name of the command being typed, like the Tab key of a
+    /// Unix shell: if a single command matches, its name is completed and
+    /// followed by a space; if several commands match, the longest prefix
+    /// they share is completed, or the matching commands are listed if there
+    /// is nothing more to complete.
     fn complete(&mut self) {
+        // Only the name of the command (the first word) can be completed.
         let text = self.editor.text();
         if !self.editor.at_end() || text.contains(char::is_whitespace) {
             return;
@@ -411,6 +437,9 @@ impl<S: System> Console<S> {
         self.render_footer(areas.footer, buf);
     }
 
+    /// Draws the header: the name of the console on the left, and the
+    /// version, the uptime and the number of threads of the system on the
+    /// right.
     fn render_header(&self, area: Rect, buf: &mut Buffer) {
         let stats = self.monitor.stats();
         Block::new()
@@ -446,6 +475,9 @@ impl<S: System> Console<S> {
         buf.set_line(area.right() - width, area.y, &right, width);
     }
 
+    /// Draws the shell: its border, the output and the prompt inside it, and
+    /// a scrollbar on its right border when the content does not fit. The
+    /// scroll offset is clamped to the content during the drawing.
     fn render_shell(&mut self, area: Rect, buf: &mut Buffer) {
         let content = area.inner(Margin::new(2, 1));
         let (total, scroll) = self.render_shell_content(content, buf);
@@ -467,6 +499,8 @@ impl<S: System> Console<S> {
         // fit in the shell.
         let height = usize::from(content.height);
         if total > height {
+            // The scrollbar position is counted from the top of the content,
+            // while the scroll offset is counted from its bottom.
             let max_scroll = total - height;
             let mut state = ScrollbarState::new(max_scroll + 1).position(max_scroll - scroll);
             Scrollbar::new(ScrollbarOrientation::VerticalRight)
@@ -508,11 +542,16 @@ impl<S: System> Console<S> {
         let cursor = prompt_length + self.editor.cursor();
         let prompt_rows = prompt.len() / width + 1;
 
+        // The content is made of the output followed by the prompt rows. When
+        // the shell is not scrolled, the last rows of the content are
+        // displayed, so that the prompt is always at the bottom.
         let total = self.output.len() + prompt_rows;
         let scroll = self.scroll.min(total.saturating_sub(height));
         let first = total.saturating_sub(height + scroll);
 
         for (row, y) in (area.top()..area.bottom()).enumerate() {
+            // Find the characters displayed on this row: a line of the output,
+            // a part of the prompt, or nothing below the end of the content.
             let index = first + row;
             let cells: &[StyledChar] = if let Some(line) = self.output.line(index) {
                 line
@@ -545,6 +584,9 @@ impl<S: System> Console<S> {
         (total, scroll)
     }
 
+    /// Draws the panels of the sidebar from top to bottom, each one in its own
+    /// bordered block. The panels that do not fit in the sidebar are not
+    /// drawn.
     fn render_sidebar(&self, area: Rect, buf: &mut Buffer) {
         let stats = self.monitor.stats();
         let mut y = area.y;
@@ -566,6 +608,8 @@ impl<S: System> Console<S> {
         }
     }
 
+    /// Draws the footer: the main keyboard shortcuts on the left, and the
+    /// number of lines of the output on the right.
     fn render_footer(&self, area: Rect, buf: &mut Buffer) {
         Block::new()
             .style(Style::new().bg(theme::BACKGROUND_DARK))

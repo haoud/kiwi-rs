@@ -9,16 +9,35 @@ static REGULAR_FONT: &[u8] = include_bytes!("../../assets/fonts/terminus16.psf")
 /// The bold variant of the embedded font.
 static BOLD_FONT: &[u8] = include_bytes!("../../assets/fonts/terminus16-bold.psf");
 
+/// The magic number at the start of a PSF1 font.
 const PSF1_MAGIC: [u8; 2] = [0x36, 0x04];
+
+/// The PSF1 font has 512 glyphs instead of 256.
 const PSF1_MODE_512: u8 = 0x01;
+
+/// The PSF1 font has a Unicode table after its glyphs.
 const PSF1_MODE_HAS_TABLE: u8 = 0x02;
+
+/// The Unicode table of the PSF1 font may contain sequences of characters
+/// (this also implies that the font has a Unicode table).
 const PSF1_MODE_HAS_SEQUENCES: u8 = 0x04;
+
+/// Ends the list of characters of a glyph in a PSF1 Unicode table.
 const PSF1_SEPARATOR: u16 = 0xFFFF;
+
+/// Starts a sequence of characters in a PSF1 Unicode table.
 const PSF1_START_SEQUENCE: u16 = 0xFFFE;
 
+/// The magic number at the start of a PSF2 font.
 const PSF2_MAGIC: [u8; 4] = [0x72, 0xB5, 0x4A, 0x86];
+
+/// The PSF2 font has a Unicode table after its glyphs.
 const PSF2_HAS_UNICODE_TABLE: u32 = 0x01;
+
+/// Ends the list of characters of a glyph in a PSF2 Unicode table.
 const PSF2_SEPARATOR: u8 = 0xFF;
+
+/// Starts a sequence of characters in a PSF2 Unicode table.
 const PSF2_START_SEQUENCE: u8 = 0xFE;
 
 /// The reasons why a font cannot be parsed.
@@ -38,9 +57,15 @@ pub enum Error {
 /// each line padded to a whole number of bytes, most significant bit first.
 #[derive(Debug, Clone, Copy)]
 pub struct Glyph<'a> {
+    /// The rows of the glyph, from top to bottom.
     bitmap: &'a [u8],
+
+    /// The size of the glyph, in pixels.
     width: usize,
     height: usize,
+
+    /// The number of bytes of a row: the width rounded up to a multiple of 8,
+    /// divided by 8.
     bytes_per_row: usize,
 }
 
@@ -80,10 +105,17 @@ impl Glyph<'_> {
 /// A bitmap font where all the glyphs have the same size.
 #[derive(Debug, Clone)]
 pub struct Font {
+    /// The bitmaps of the glyphs of the font, one after the other.
     glyphs: &'static [u8],
+
+    /// The number of glyphs in the font, not counting the synthesized ones.
     count: usize,
+
+    /// The size of the glyphs, in pixels.
     width: usize,
     height: usize,
+
+    /// The size of the bitmap of a glyph, in bytes.
     bytes_per_glyph: usize,
 
     /// The index of the glyph of each character from U+0000 to U+00FF, or
@@ -138,6 +170,10 @@ impl Font {
         }
     }
 
+    /// Parses a PSF1 font: a 4 bytes header (magic number, mode and height),
+    /// followed by 256 or 512 glyphs 8 pixels wide, and by an optional
+    /// Unicode table listing the characters of each glyph as UTF-16 code
+    /// units.
     fn parse_psf1(data: &'static [u8]) -> Result<Self, Error> {
         let mode = *data.get(2).ok_or(Error::Truncated)?;
         let height = usize::from(*data.get(3).ok_or(Error::Truncated)?);
@@ -150,6 +186,10 @@ impl Font {
                 .chunks_exact(2)
                 .map(|pair| u16::from_le_bytes([pair[0], pair[1]]));
 
+            // Each glyph has a list of characters, followed by an optional
+            // list of sequences of characters (e.g. a letter followed by a
+            // combining accent), and ends with a separator. Sequences are
+            // ignored, since the console only displays single characters.
             for glyph in 0..count {
                 let mut in_sequence = false;
                 for entry in entries.by_ref() {
@@ -172,6 +212,10 @@ impl Font {
         Ok(font)
     }
 
+    /// Parses a PSF2 font: a header of 8 little-endian 32 bits fields (magic
+    /// number, version, header size, flags, number of glyphs, size of a glyph,
+    /// height and width), followed by the glyphs and by an optional Unicode
+    /// table listing the characters of each glyph in UTF-8.
     fn parse_psf2(data: &'static [u8]) -> Result<Self, Error> {
         let field = |index: usize| -> Result<u32, Error> {
             let bytes = data.get(index * 4..index * 4 + 4).ok_or(Error::Truncated)?;
@@ -331,12 +375,16 @@ impl Font {
     /// the font approximates them with the light lines, as most console fonts
     /// with a limited number of glyphs do.
     pub fn synthesize_missing(&mut self) {
+        // Each heavy line is paired with its light counterpart, to detect if
+        // the font approximates the first with the second.
         let (width, height) = (self.width, self.height);
         let heavy = [('\u{2501}', '\u{2500}'), ('\u{2503}', '\u{2502}')];
         let characters = ('\u{2580}'..='\u{259F}')
             .chain('\u{2800}'..='\u{28FF}')
             .chain(heavy.iter().map(|&(heavy, _)| heavy));
         for ch in characters {
+            // Keep the glyphs of the font, unless they are approximations
+            // that must be replaced by a synthesized glyph.
             if let Some(glyph) = self.glyph(ch) {
                 let approximated = heavy.iter().any(|&(heavy, light)| {
                     heavy == ch && self.glyph(light).is_some_and(|l| l.bitmap == glyph.bitmap)
@@ -350,6 +398,9 @@ impl Font {
                 continue;
             };
 
+            // Draw the glyph pixel by pixel into the synthetic glyphs, with the
+            // same layout as the glyphs of the font, and map the character to
+            // its index (which follows the indexes of the font glyphs).
             let index = self.count + self.synthetic.len() / self.bytes_per_glyph;
             let bytes_per_row = width.div_ceil(8);
             for y in 0..height {
@@ -436,6 +487,7 @@ fn synthetic_pixel(ch: char, width: usize, height: usize) -> Option<impl Fn(usiz
         0x2594 => alloc::boxed::Box::new(move |x, y| rect(x, y, (0, 0, 8, 1))),
         0x2595 => alloc::boxed::Box::new(move |x, y| rect(x, y, (7, 0, 8, 8))),
         0x2596..=0x259F => {
+            // The quadrants set for each character, from U+2596 to U+259F.
             const MASKS: [u8; 10] = [
                 4,
                 8,

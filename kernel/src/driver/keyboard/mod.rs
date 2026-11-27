@@ -28,7 +28,11 @@ const QUEUE_CAPACITY: usize = 64;
 /// consumer of the events. It is a fixed-size ring buffer, so that pushing an
 /// event from an interrupt handler never allocates memory.
 struct Queue {
+    /// The slots of the ring buffer. A slot contains an event if it is one of
+    /// the `len` slots following `head` (wrapping around the end).
     events: [Option<KeyEvent>; QUEUE_CAPACITY],
+
+    /// The index of the slot of the oldest event.
     head: usize,
     len: usize,
 
@@ -46,6 +50,8 @@ impl Queue {
         }
     }
 
+    /// Appends an event at the end of the queue. If the queue is full, the
+    /// event is returned in the error.
     fn push(&mut self, event: KeyEvent) -> Result<(), KeyEvent> {
         if self.len == QUEUE_CAPACITY {
             return Err(event);
@@ -55,6 +61,7 @@ impl Queue {
         Ok(())
     }
 
+    /// Removes and returns the oldest event of the queue, if any.
     fn pop(&mut self) -> Option<KeyEvent> {
         if self.len == 0 {
             return None;

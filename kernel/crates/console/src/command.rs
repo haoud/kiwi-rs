@@ -60,6 +60,8 @@ pub struct Context<'a> {
 /// The set of commands known by the console, sorted by name.
 #[derive(Debug, Clone, Default)]
 pub struct Registry {
+    /// The commands, sorted by name (ignoring the case) so that a command can
+    /// be found with a binary search.
     commands: Vec<Command>,
 }
 
@@ -99,6 +101,10 @@ impl Registry {
         })
     }
 
+    /// Finds the position of a command in the sorted list of commands, ignoring
+    /// the case. Returns `Ok` with the index of the command if it is
+    /// registered, or `Err` with the index where it should be inserted to keep
+    /// the list sorted, like `binary_search`.
     fn position(&self, name: &str) -> Result<usize, usize> {
         self.commands
             .binary_search_by(|command| compare_ignore_case(command.name, name))

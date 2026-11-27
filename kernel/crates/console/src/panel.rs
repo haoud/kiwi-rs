@@ -145,11 +145,15 @@ impl Panel for CpuPanel {
         "CPU"
     }
 
+    /// The panel needs one row for the average load, the rows of the
+    /// sparkline, an empty row, and one row per CPU.
     fn height(&self, stats: &Stats, _: u16) -> u16 {
         let cpus = u16::try_from(stats.cpus.len()).unwrap_or(u16::MAX);
         1 + SPARKLINE_HEIGHT + 1 + cpus
     }
 
+    /// Draws the average load and the number of CPUs, the history of the
+    /// average load, and a gauge with the load of each CPU.
     fn render(&self, stats: &Stats, area: Rect, buf: &mut Buffer) {
         let load = stats.total_load();
         let [summary, history, _, cpus] = split_rows(area, [1, SPARKLINE_HEIGHT, 1, FILL]);
@@ -186,6 +190,8 @@ impl Panel for CpuPanel {
 pub struct MemoryPanel;
 
 impl MemoryPanel {
+    /// Draws the usage of a memory pool on two rows: its name with the number
+    /// of bytes used and available, then a gauge with the usage ratio.
     fn render_pool(name: &str, usage: MemoryUsage, area: Rect, buf: &mut Buffer) {
         let [details, gauge] = split_rows(area, [1, 1]);
         let value = Line::from(vec_spans([
@@ -211,10 +217,14 @@ impl Panel for MemoryPanel {
         "Memory"
     }
 
+    /// The panel needs two rows per memory pool and two rows for the history
+    /// of the physical memory usage, separated by empty rows.
     fn height(&self, _: &Stats, _: u16) -> u16 {
         2 + 1 + 2 + 1 + 2
     }
 
+    /// Draws the usage of the physical memory and of the kernel heap, and
+    /// the history of the usage of the physical memory.
     fn render(&self, stats: &Stats, area: Rect, buf: &mut Buffer) {
         let [physical, _, heap, _, history] = split_rows(area, [2, 1, 2, 1, 2]);
 

@@ -23,8 +23,15 @@ pub struct Scrollback {
     /// The lines, from the oldest to the newest. The last line is the one
     /// currently being written: it is never displayed if it is empty.
     lines: VecDeque<Vec<StyledChar>>,
+
+    /// The maximum number of characters of a line: longer lines are wrapped.
     width: usize,
+
+    /// The maximum number of lines kept: the oldest lines are forgotten when
+    /// new lines are written.
     capacity: usize,
+
+    /// The style of the text written.
     fg: Color,
     bold: bool,
 }
@@ -130,6 +137,8 @@ impl Scrollback {
         }
     }
 
+    /// Appends a printable character to the current line with the current
+    /// style, starting a new line if the current one is full.
     fn push(&mut self, ch: char) {
         if self.current().len() >= self.width {
             self.new_line();
@@ -147,6 +156,8 @@ impl Scrollback {
         self.lines.back_mut().expect("Scrollback without lines")
     }
 
+    /// Starts a new line, forgetting the oldest line if the scrollback is
+    /// full.
     fn new_line(&mut self) {
         if self.lines.len() > self.capacity {
             self.lines.pop_front();

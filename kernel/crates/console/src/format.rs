@@ -9,11 +9,16 @@ pub struct Bytes(pub u64);
 
 impl fmt::Display for Bytes {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        /// The binary units, from the smallest to the largest. Values lower
+        /// than 1 KiB are displayed in bytes.
         const UNITS: [&str; 5] = ["KiB", "MiB", "GiB", "TiB", "PiB"];
         if self.0 < 1024 {
             return pad(f, format_args!("{} B", self.0));
         }
 
+        // Find the largest unit in which the value is at least 1, then compute
+        // the value in tenths of this unit to display one decimal without any
+        // floating point arithmetic.
         let mut unit = 0;
         let mut divisor: u64 = 1024;
         while unit + 1 < UNITS.len() && self.0 / divisor >= 1024 {
@@ -83,6 +88,8 @@ fn pad(f: &mut fmt::Formatter<'_>, args: fmt::Arguments<'_>) -> fmt::Result {
 /// A small fixed-size buffer implementing `fmt::Write`, used to format short
 /// strings without allocating.
 struct Buffer<const N: usize> {
+    /// The bytes written into the buffer. Only the first `len` bytes are
+    /// meaningful.
     data: [u8; N],
     len: usize,
 }
@@ -102,6 +109,8 @@ impl<const N: usize> Buffer<N> {
 }
 
 impl<const N: usize> fmt::Write for Buffer<N> {
+    /// Appends a string to the buffer, or fails without writing anything if the
+    /// buffer is too small to contain it.
     fn write_str(&mut self, s: &str) -> fmt::Result {
         let end = self.len + s.len();
         if end > N {

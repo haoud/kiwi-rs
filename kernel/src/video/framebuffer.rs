@@ -49,9 +49,16 @@ pub struct Framebuffer {
     /// The pixels of the framebuffer, line by line. Each line contains
     /// `stride` pixels, of which only the first `width` are displayed.
     pixels: &'static mut [u32],
+
+    /// The size of the framebuffer, in pixels.
     width: usize,
     height: usize,
+
+    /// The number of pixels between the start of two consecutive lines. It
+    /// may be greater than the width if the lines are padded.
     stride: usize,
+
+    /// The layout of a pixel, used to convert colors into pixel values.
     format: PixelFormat,
 }
 
@@ -62,6 +69,9 @@ impl Framebuffer {
     /// Returns an error if there is no usable framebuffer, if its pixel format
     /// is not supported, or if it has already been taken.
     pub fn take() -> Result<Self, Error> {
+        /// Whether the framebuffer has already been taken. Since the
+        /// framebuffer is shared as a mutable slice, it must only be taken
+        /// once to avoid aliasing.
         static TAKEN: AtomicBool = AtomicBool::new(false);
 
         let info = arch::framebuffer::framebuffer().ok_or(Error::NotFound)?;
@@ -113,6 +123,8 @@ impl Framebuffer {
     /// Converts a color into the value of a pixel of this framebuffer.
     #[must_use]
     pub fn encode(&self, color: Rgb) -> u32 {
+        // Each component is truncated to its size in the pixel (keeping its
+        // most significant bits), then shifted to its position.
         let component = |value: u8, shift: u8, size: u8| (u32::from(value) >> (8 - size)) << shift;
         component(color.red, self.format.red_shift, self.format.red_size)
             | component(color.green, self.format.green_shift, self.format.green_size)

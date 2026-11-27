@@ -30,6 +30,9 @@ pub enum Key {
 pub struct Modifiers {
     pub shift: bool,
     pub ctrl: bool,
+
+    /// The left alt key is held down (`AltGr` is not a modifier for the
+    /// console, since it is used to type characters).
     pub alt: bool,
 }
 
@@ -37,6 +40,8 @@ pub struct Modifiers {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct KeyEvent {
     pub key: Key,
+
+    /// The modifier keys held down when the key was pressed.
     pub modifiers: Modifiers,
 }
 

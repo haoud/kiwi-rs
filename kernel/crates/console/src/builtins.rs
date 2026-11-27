@@ -19,6 +19,8 @@ pub fn register(registry: &mut Registry) {
     }
 }
 
+/// The builtin commands, in no particular order: the registry sorts them by
+/// name.
 const COMMANDS: &[Command] = &[
     Command {
         name: "help",
@@ -70,6 +72,8 @@ const COMMANDS: &[Command] = &[
     },
 ];
 
+/// Lists all the commands with their summary, or describes the command given as
+/// argument with its summary and its usage.
 fn help(ctx: &mut Context<'_>, args: &[&str]) -> Result<(), Error> {
     match args {
         [] => {
@@ -109,6 +113,8 @@ fn cls(ctx: &mut Context<'_>, _: &[&str]) -> Result<(), Error> {
     Ok(())
 }
 
+/// Displays the arguments separated by a single space, like the `echo` command
+/// of a Unix shell.
 fn echo(ctx: &mut Context<'_>, args: &[&str]) -> Result<(), Error> {
     for (i, word) in args.iter().enumerate() {
         let separator = if i == 0 { "" } else { " " };
@@ -118,6 +124,8 @@ fn echo(ctx: &mut Context<'_>, args: &[&str]) -> Result<(), Error> {
     Ok(())
 }
 
+/// Displays the command lines previously executed, numbered from the oldest to
+/// the newest.
 fn history(ctx: &mut Context<'_>, _: &[&str]) -> Result<(), Error> {
     for (i, line) in ctx.history.iter().enumerate() {
         _ = writeln!(ctx.out, "{:>4}  {line}", i + 1);
@@ -125,6 +133,8 @@ fn history(ctx: &mut Context<'_>, _: &[&str]) -> Result<(), Error> {
     Ok(())
 }
 
+/// Displays the usage of the physical memory and of the kernel heap, with the
+/// usage ratio colored according to its level.
 fn mem(ctx: &mut Context<'_>, _: &[&str]) -> Result<(), Error> {
     let pools = [
         ("Physical memory", ctx.system.physical_memory()),
@@ -154,6 +164,8 @@ fn mem(ctx: &mut Context<'_>, _: &[&str]) -> Result<(), Error> {
     Ok(())
 }
 
+/// Displays the load of each CPU during the last refresh period of the console,
+/// and the average load of all the CPUs.
 fn cpu(ctx: &mut Context<'_>, _: &[&str]) -> Result<(), Error> {
     let stats = ctx.stats;
     ctx.out
@@ -174,6 +186,8 @@ fn cpu(ctx: &mut Context<'_>, _: &[&str]) -> Result<(), Error> {
     Ok(())
 }
 
+/// Displays the time elapsed since the boot of the system, both in a human
+/// readable format and in seconds.
 fn uptime(ctx: &mut Context<'_>, _: &[&str]) -> Result<(), Error> {
     let uptime = ctx.system.uptime();
     _ = writeln!(

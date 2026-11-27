@@ -4,6 +4,7 @@ use alloc::{collections::VecDeque, string::String, vec::Vec};
 /// The list of the last command lines executed, from the oldest to the newest.
 #[derive(Debug, Clone)]
 pub struct History {
+    /// The lines, from the oldest to the newest.
     entries: VecDeque<String>,
     capacity: usize,
 }
@@ -64,14 +65,22 @@ impl History {
 /// A single line editor, with a cursor and the ability to browse the history.
 #[derive(Debug, Clone)]
 pub struct LineEditor {
+    /// The characters of the line. Characters are stored individually (and
+    /// not in a `String`) so that the cursor can be moved and characters can
+    /// be inserted or removed by index.
     chars: Vec<char>,
+
+    /// The position of the cursor, in characters: the next character typed
+    /// is inserted at this position.
     cursor: usize,
     max_len: usize,
 
     /// The index of the history line being edited, if the user is browsing
-    /// the history, and the line that was being typed before starting to
-    /// browse it, restored when going past the newest line.
+    /// the history.
     browsing: Option<usize>,
+
+    /// The line that was being typed before starting to browse the history,
+    /// restored when going past the newest line of the history.
     draft: Vec<char>,
 }
 
@@ -213,6 +222,8 @@ impl LineEditor {
         }
     }
 
+    /// Replaces the whole line with the given characters, truncated to the
+    /// maximum length of the line, and moves the cursor to the end of the line.
     fn replace(&mut self, chars: impl Iterator<Item = char>) {
         self.chars.clear();
         self.chars.extend(chars.take(self.max_len));

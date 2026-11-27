@@ -21,10 +21,14 @@ pub struct KeyboardInput {
     /// characters (Ctrl+C gives U+0003), which tells the console that Ctrl
     /// was held.
     decoder: EventDecoder<pc_keyboard::layouts::AnyLayout>,
+
+    /// The layout used by the decoder. It is compared with the current layout
+    /// at each event, to follow the changes made with the `keyb` command.
     layout: Layout,
 }
 
 impl KeyboardInput {
+    /// Creates a new input using the current keyboard layout.
     pub fn new() -> Self {
         let layout = layout::current();
         Self {
@@ -101,6 +105,8 @@ fn convert_char(ch: char) -> KeyEvent {
 }
 
 impl Input for KeyboardInput {
+    /// Returns the next key press, skipping the events that do not produce a
+    /// key press for the console (key releases, modifier keys...).
     fn poll_key(&mut self, cx: &mut Context<'_>) -> Poll<KeyEvent> {
         loop {
             let event = ready!(keyboard::poll_event(cx));
@@ -115,8 +121,15 @@ impl Input for KeyboardInput {
 /// the console is late, the missed ticks are skipped instead of firing in a
 /// burst.
 pub struct Interval {
+    /// The time between two ticks.
     period: Duration,
+
+    /// The deadline of the next tick.
     next: Instant,
+
+    /// The future waiting for the next tick, created by the first poll after
+    /// a tick. It is kept between polls so that the timer is registered only
+    /// once per tick.
     sleep: Option<Sleep>,
 }
 
@@ -132,11 +145,17 @@ impl Interval {
 }
 
 impl Ticker for Interval {
+    /// Returns `Poll::Ready` once the deadline of the next tick is reached.
     fn poll_tick(&mut self, cx: &mut Context<'_>) -> Poll<()> {
+        // Sleep until the deadline of the next tick, and not for a whole
+        // period, so that the time spent by the console between two ticks
+        // does not delay the following ticks.
         let remaining = self.next.duration_since(Instant::now());
         let sleep = self.sleep.get_or_insert_with(|| future::sleep(remaining));
         ready!(Pin::new(sleep).poll(cx));
 
+        // Compute the deadline of the next tick. If the console was so late
+        // that this deadline is already over, restart from now.
         self.sleep = None;
         let now = Instant::now();
         self.next += self.period;

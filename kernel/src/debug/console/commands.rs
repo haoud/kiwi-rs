@@ -21,6 +21,8 @@ pub fn register<S: console::system::System>(console: &mut Console<S>) {
     }
 }
 
+/// The commands specific to the kernel, in no particular order: the registry
+/// of the console sorts them by name.
 const COMMANDS: &[Command] = &[
     Command {
         name: "ps",
@@ -54,6 +56,7 @@ const MAX_STRESS_THREADS: usize = 64;
 /// The maximum duration of a `stress` run, in seconds.
 const MAX_STRESS_SECONDS: u64 = 300;
 
+/// Lists the threads of the system with their identifier and their state.
 #[allow(clippy::unnecessary_wraps)]
 fn ps(ctx: &mut Context<'_>, _: &[&str]) -> Result<(), Error> {
     let tasks = scheduler::tasks();
@@ -66,6 +69,9 @@ fn ps(ctx: &mut Context<'_>, _: &[&str]) -> Result<(), Error> {
     Ok(())
 }
 
+/// Creates the given number of threads that spin for the given duration (5
+/// seconds by default), to check that the load of the CPUs is correctly
+/// displayed and that the scheduler spreads the threads over the CPUs.
 fn stress(ctx: &mut Context<'_>, args: &[&str]) -> Result<(), Error> {
     let (threads, seconds) = match args {
         [threads] => (command::parse::<usize>(threads)?, 5),
@@ -103,6 +109,8 @@ fn stress(ctx: &mut Context<'_>, args: &[&str]) -> Result<(), Error> {
     Ok(())
 }
 
+/// Displays the current keyboard layout and the available ones, or changes
+/// the current layout.
 fn keyb(ctx: &mut Context<'_>, args: &[&str]) -> Result<(), Error> {
     match args {
         [] => {
@@ -130,6 +138,7 @@ fn keyb(ctx: &mut Context<'_>, args: &[&str]) -> Result<(), Error> {
     }
 }
 
+/// Restarts the computer. This command only returns if the restart failed.
 fn reboot(_: &mut Context<'_>, _: &[&str]) -> Result<(), Error> {
     log::info!("Rebooting...");
     #[cfg(target_arch = "x86_64")]

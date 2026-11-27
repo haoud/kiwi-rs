@@ -32,26 +32,61 @@ const STATUS_OUTPUT_FULL: u8 = 1 << 0;
 /// written yet.
 const STATUS_INPUT_FULL: u8 = 1 << 1;
 
+/// Reads the configuration byte of the controller from the data port.
 const COMMAND_READ_CONFIG: u8 = 0x20;
+
+/// Writes the next byte written to the data port into the configuration byte.
 const COMMAND_WRITE_CONFIG: u8 = 0x60;
+
+/// Disables the second port (usually the mouse).
 const COMMAND_DISABLE_PORT2: u8 = 0xA7;
+
+/// Runs the self test of the controller, which answers on the data port.
 const COMMAND_TEST_CONTROLLER: u8 = 0xAA;
+
+/// Tests the first port, the result is available on the data port.
 const COMMAND_TEST_PORT1: u8 = 0xAB;
+
+/// Disables the first port (the keyboard).
 const COMMAND_DISABLE_PORT1: u8 = 0xAD;
+
+/// Enables the first port (the keyboard).
 const COMMAND_ENABLE_PORT1: u8 = 0xAE;
+
+/// Pulses the reset line of the CPU, which restarts the computer.
 const COMMAND_PULSE_RESET: u8 = 0xFE;
 
+/// The configuration bit enabling the interrupt of the first port.
 const CONFIG_PORT1_IRQ: u8 = 1 << 0;
+
+/// The configuration bit enabling the interrupt of the second port.
 const CONFIG_PORT2_IRQ: u8 = 1 << 1;
+
+/// The configuration bit disabling the clock of the first port, which is set
+/// by [`COMMAND_DISABLE_PORT1`] and cleared by [`COMMAND_ENABLE_PORT1`].
 const CONFIG_PORT1_CLOCK_DISABLED: u8 = 1 << 4;
+
+/// The configuration bit enabling the translation of the scancodes sent by
+/// the keyboard into the scancode set 1.
 const CONFIG_TRANSLATION: u8 = 1 << 6;
 
+/// The answer of the controller when its self test succeeded.
 const CONTROLLER_TEST_PASSED: u8 = 0x55;
+
+/// The answer of the controller when the test of a port succeeded.
 const PORT_TEST_PASSED: u8 = 0x00;
 
+/// Resets the keyboard, which answers with an acknowledgement then with the
+/// result of its self test.
 const DEVICE_RESET: u8 = 0xFF;
+
+/// Allows the keyboard to send the scancodes of the keys pressed.
 const DEVICE_ENABLE_SCANNING: u8 = 0xF4;
+
+/// The acknowledgement sent by the keyboard after each command.
 const DEVICE_ACK: u8 = 0xFA;
+
+/// The answer of the keyboard when its self test succeeded.
 const DEVICE_SELF_TEST_PASSED: u8 = 0xAA;
 
 /// The number of times the status register is polled before giving up. Since
@@ -150,6 +185,7 @@ pub fn handle_irq() {
     // SAFETY: Reading the status register has no side effect.
     let status = unsafe { STATUS_COMMAND.read() };
     if status & STATUS_OUTPUT_FULL == 0 {
+        // Spurious interrupt: there is nothing to read.
         return;
     }
 
@@ -159,6 +195,8 @@ pub fn handle_irq() {
     let event = DECODER.lock_irq_safe().advance_state(byte);
     match event {
         Ok(Some(event)) => keyboard::push_event(event),
+        // The byte is a prefix of a scancode made of several bytes (e.g. the
+        // `0xE0` prefix of the extended keys): wait for the next bytes.
         Ok(None) => {}
         // Acknowledgements and unknown keys are not key events.
         Err(error) => log::debug!("PS/2: ignoring byte {byte:#04x} ({error:?})"),

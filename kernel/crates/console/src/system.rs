@@ -32,7 +32,11 @@ impl MemoryUsage {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct CpuTimes {
     pub id: u32,
+
+    /// The time spent by the CPU running code.
     pub busy: u64,
+
+    /// The time spent by the CPU waiting for something to do.
     pub idle: u64,
 }
 
@@ -78,8 +82,11 @@ pub struct Stats {
     pub uptime: Duration,
     pub memory: MemoryUsage,
     pub heap: MemoryUsage,
-    pub cpus: Vec<CpuLoad>,
     pub threads: usize,
+
+    /// The load of each CPU during the last sampling period, sorted by CPU
+    /// identifier.
+    pub cpus: Vec<CpuLoad>,
 
     /// The average load of the CPUs at the last samples, in per mille, from
     /// the oldest to the newest.
@@ -106,7 +113,11 @@ impl Stats {
 /// such as the load of each CPU during the last period.
 #[derive(Debug, Clone, Default)]
 pub struct Monitor {
+    /// The times of the CPUs at the previous refresh.
     previous: Vec<CpuTimes>,
+
+    /// The times of the CPUs at the last refresh. The load of a CPU is the
+    /// ratio of busy time between the previous and the last refresh.
     current: Vec<CpuTimes>,
     stats: Stats,
 }
@@ -127,10 +138,15 @@ impl Monitor {
 
     /// Samples the system and updates the statistics.
     pub fn refresh(&mut self, system: &dyn System) {
+        // Reuse the vector of the times sampled two refreshes ago for the new
+        // sample, to avoid allocating a new vector at each refresh.
         core::mem::swap(&mut self.previous, &mut self.current);
         self.current.clear();
         system.cpu_times(&mut self.current);
 
+        // Compute the load of each CPU from the time it consumed since the
+        // previous refresh. A CPU that was not sampled before (e.g. the first
+        // refresh) is compared with zero, so its load is averaged since boot.
         self.stats.cpus.clear();
         for now in &self.current {
             let before = self
