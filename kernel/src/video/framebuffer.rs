@@ -158,9 +158,11 @@ impl Framebuffer {
         let (fg, bg) = (self.encode(fg), self.encode(bg));
         let (x_end, y_end) = self.clip(x, y, glyph.width(), glyph.height());
         for row in 0..y_end.saturating_sub(y) {
+            let bits = glyph.row(row);
             let line = self.line_mut(y + row, x, x_end);
             for (column, pixel) in line.iter_mut().enumerate() {
-                *pixel = if glyph.is_set(column, row) { fg } else { bg };
+                let set = bits[column / 8] & (0x80 >> (column % 8)) != 0;
+                *pixel = if set { fg } else { bg };
             }
         }
     }

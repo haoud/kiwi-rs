@@ -57,6 +57,15 @@ impl Glyph<'_> {
         self.height
     }
 
+    /// Returns the bytes of a row of the glyph, most significant bit first.
+    ///
+    /// # Panics
+    /// Panics if the row is out of the bounds of the glyph.
+    #[must_use]
+    pub fn row(&self, y: usize) -> &[u8] {
+        &self.bitmap[y * self.bytes_per_row..(y + 1) * self.bytes_per_row]
+    }
+
     /// Returns true if the pixel at the given position is set.
     #[must_use]
     pub fn is_set(&self, x: usize, y: usize) -> bool {

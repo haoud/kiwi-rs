@@ -7,7 +7,7 @@ use alloc::{format, vec::Vec};
 
 use ratatui::{
     buffer::Buffer,
-    layout::{Constraint, Layout, Rect},
+    layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, LineGauge, RenderDirection, Sparkline, Widget},
@@ -30,8 +30,62 @@ pub trait Panel: Send {
 
     /// Draws the content of the panel in the given area of the buffer. The
     /// area has the width given to [`Panel::height`] and the height returned
-    /// by it.
+    /// by it, or all the remaining height of the sidebar for a flexible panel.
     fn render(&self, stats: &Stats, area: Rect, buf: &mut Buffer);
+
+    /// Returns true if the panel takes all the height left in the sidebar
+    /// below the previous panels, instead of the height it requests.
+    fn is_flexible(&self) -> bool {
+        false
+    }
+
+    /// Called at every tick of the console with the time elapsed since the
+    /// boot, to animate the panel.
+    fn update(&mut self, _uptime: core::time::Duration) {}
+}
+
+/// A height for [`split_rows`] meaning "all the remaining rows".
+pub const FILL: u16 = u16::MAX;
+
+/// Splits an area into rows of the given heights, from top to bottom. A
+/// height of [`FILL`] takes all the rows left, and the rows that do not fit
+/// in the area are empty.
+///
+/// This is used instead of Ratatui's `Layout`, whose constraint solver is
+/// overkill for stacking fixed heights and expensive without a floating point
+/// unit (the kernel is compiled with soft-float).
+#[must_use]
+pub fn split_rows<const N: usize>(area: Rect, heights: [u16; N]) -> [Rect; N] {
+    let mut y = area.top();
+    heights.map(|height| {
+        let height = height.min(area.bottom() - y);
+        let row = Rect::new(area.x, y, area.width, height);
+        y += height;
+        row
+    })
+}
+
+/// Splits an area into columns of the given widths, from left to right. A
+/// width of [`FILL`] takes all the columns left minus the fixed widths of the
+/// following columns.
+#[must_use]
+pub fn split_columns<const N: usize>(area: Rect, widths: [u16; N]) -> [Rect; N] {
+    let fixed: u16 = widths
+        .iter()
+        .filter(|&&w| w != FILL)
+        .fold(0, |a, &w| a.saturating_add(w));
+    let mut x = area.left();
+    widths.map(|width| {
+        let width = if width == FILL {
+            area.width.saturating_sub(fixed)
+        } else {
+            width
+        }
+        .min(area.right() - x);
+        let column = Rect::new(x, area.y, width, area.height);
+        x += width;
+        column
+    })
 }
 
 /// The height of the sparklines, in rows.
@@ -98,13 +152,7 @@ impl Panel for CpuPanel {
 
     fn render(&self, stats: &Stats, area: Rect, buf: &mut Buffer) {
         let load = stats.total_load();
-        let [summary, history, _, cpus] = Layout::vertical([
-            Constraint::Length(1),
-            Constraint::Length(SPARKLINE_HEIGHT),
-            Constraint::Length(1),
-            Constraint::Fill(1),
-        ])
-        .areas(area);
+        let [summary, history, _, cpus] = split_rows(area, [1, SPARKLINE_HEIGHT, 1, FILL]);
 
         let value = Line::from(vec_spans([
             Span::styled(
@@ -139,8 +187,7 @@ pub struct MemoryPanel;
 
 impl MemoryPanel {
     fn render_pool(name: &str, usage: MemoryUsage, area: Rect, buf: &mut Buffer) {
-        let [details, gauge] =
-            Layout::vertical([Constraint::Length(1), Constraint::Length(1)]).areas(area);
+        let [details, gauge] = split_rows(area, [1, 1]);
         let value = Line::from(vec_spans([
             Span::styled(
                 format!("{}", Bytes(usage.used)),
@@ -169,14 +216,7 @@ impl Panel for MemoryPanel {
     }
 
     fn render(&self, stats: &Stats, area: Rect, buf: &mut Buffer) {
-        let [physical, _, heap, _, history] = Layout::vertical([
-            Constraint::Length(2),
-            Constraint::Length(1),
-            Constraint::Length(2),
-            Constraint::Length(1),
-            Constraint::Length(2),
-        ])
-        .areas(area);
+        let [physical, _, heap, _, history] = split_rows(area, [2, 1, 2, 1, 2]);
 
         Self::render_pool("physical", stats.memory, physical, buf);
         Self::render_pool("kernel heap", stats.heap, heap, buf);
@@ -189,4 +229,141 @@ impl Panel for MemoryPanel {
 /// Builds a vector of spans from an array, to build a [`Line`].
 fn vec_spans<const N: usize>(spans: [Span<'static>; N]) -> Vec<Span<'static>> {
     Vec::from(spans)
+}
+
+/// A hexadecimal dump of a memory region that scrolls continuously, looping
+/// back to the start of the region when its end is reached.
+#[derive(Debug, Clone, Copy)]
+pub struct HexDumpPanel {
+    title: &'static str,
+    memory: &'static [u8],
+
+    /// The offset of the first byte displayed when the console starts.
+    start: usize,
+
+    /// The number of lines scrolled since the console started.
+    scrolled: usize,
+}
+
+impl HexDumpPanel {
+    /// The time between two lines of the dump.
+    pub const LINE_PERIOD: core::time::Duration = core::time::Duration::from_millis(100);
+
+    /// The width of the address column, followed by a space.
+    const ADDRESS_WIDTH: u16 = 9;
+
+    /// Creates a panel dumping the given memory, which must never be modified
+    /// since it is read without any synchronization (e.g. read-only data).
+    #[must_use]
+    pub const fn new(title: &'static str, memory: &'static [u8]) -> Self {
+        Self {
+            title,
+            memory,
+            start: 0,
+            scrolled: 0,
+        }
+    }
+
+    /// Starts the dump at the given offset in the memory, for example to skip
+    /// a dull beginning.
+    #[must_use]
+    pub const fn starting_at(mut self, offset: usize) -> Self {
+        self.start = offset;
+        self
+    }
+
+    /// Returns the number of bytes displayed per line for the given width:
+    /// each byte needs 3 columns in hexadecimal and 1 column in ASCII.
+    fn bytes_per_line(width: u16) -> usize {
+        let available = usize::from(width.saturating_sub(Self::ADDRESS_WIDTH)) / 4;
+        [16, 8, 4, 2, 1]
+            .into_iter()
+            .find(|&n| n <= available)
+            .unwrap_or(1)
+    }
+
+    /// Returns the color of a byte, depending on its kind.
+    fn color(byte: u8) -> ratatui::style::Color {
+        match byte {
+            0 => theme::BORDER,
+            b' '..=b'~' => theme::TEXT,
+            0xFF => theme::WARNING,
+            0x80..=0xFE => theme::TEAL,
+            _ => theme::INFO,
+        }
+    }
+}
+
+impl Panel for HexDumpPanel {
+    fn title(&self) -> &'static str {
+        self.title
+    }
+
+    fn height(&self, _: &Stats, _: u16) -> u16 {
+        3
+    }
+
+    fn is_flexible(&self) -> bool {
+        true
+    }
+
+    fn update(&mut self, uptime: core::time::Duration) {
+        let lines = uptime.as_millis() / Self::LINE_PERIOD.as_millis();
+        self.scrolled = usize::try_from(lines).unwrap_or(0);
+    }
+
+    fn render(&self, _: &Stats, area: Rect, buf: &mut Buffer) {
+        let per_line = Self::bytes_per_line(area.width);
+        let lines = self.memory.len().div_ceil(per_line);
+        if lines == 0 {
+            return;
+        }
+
+        let rows = usize::from(area.height);
+        let current = (self.start / per_line + self.scrolled) % lines;
+        for (row, y) in (area.top()..area.bottom()).enumerate() {
+            // The last row displays the current line, and the rows above it
+            // the previous lines, wrapping around the region.
+            let line = (current + lines * rows - (rows - 1 - row)) % lines;
+            let offset = line * per_line;
+            let bytes = &self.memory[offset..(offset + per_line).min(self.memory.len())];
+
+            let current = row + 1 == rows;
+            let background = if current {
+                theme::SURFACE
+            } else {
+                theme::BACKGROUND
+            };
+            buf.set_style(
+                Rect::new(area.x, y, area.width, 1),
+                Style::new().bg(background),
+            );
+
+            let address = bytes.as_ptr() as usize;
+            let address_style = if current {
+                Style::new().fg(theme::ACCENT)
+            } else {
+                theme::muted()
+            };
+            // Only display the low 32 bits of the address, which are enough
+            // to follow the progression of the dump in a narrow panel.
+            #[allow(clippy::cast_possible_truncation)]
+            buf.set_string(area.x, y, format!("{:08x}", address as u32), address_style);
+
+            let mut x = area.x + Self::ADDRESS_WIDTH;
+            let ascii_x = x + u16::try_from(per_line * 3).unwrap_or(u16::MAX);
+            for (i, &byte) in bytes.iter().enumerate() {
+                let style = Style::new().fg(Self::color(byte));
+                buf.set_string(x, y, format!("{byte:02x}"), style);
+                let ch = if byte.is_ascii_graphic() || byte == b' ' {
+                    char::from(byte)
+                } else {
+                    '·'
+                };
+                let column = ascii_x + u16::try_from(i).unwrap_or(u16::MAX);
+                buf.set_string(column, y, ch.encode_utf8(&mut [0; 4]), style);
+                x += 3;
+            }
+        }
+    }
 }
